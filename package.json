@@ -1,0 +1,31 @@
+{
+  "name": "kawanah-agent",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "prepare": "husky",
+    "lint:frontend": "cd frontend && npm run lint",
+    "format:frontend": "cd frontend && npx prettier --write 'src/**/*.{js,jsx,css}'",
+    "format:check:frontend": "cd frontend && npx prettier --check 'src/**/*.{js,jsx,css}'",
+    "test:frontend": "cd frontend && npm run test",
+    "lint:python": "ruff check app/ && black --check app/",
+    "format:python": "black app/ && ruff --fix app/"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "lint-staged": {
+    "frontend/src/**/*.{js,jsx}": [
+      "bash -c 'cd frontend && npx eslint --fix --no-eslintrc -c eslint.config.js ${STAGED_FILES}'",
+      "bash -c 'cd frontend && npx prettier --write ${STAGED_FILES}'"
+    ],
+    "frontend/src/**/*.{css}": [
+      "bash -c 'cd frontend && npx prettier --write ${STAGED_FILES}'"
+    ],
+    "app/**/*.py": [
+      "ruff check --fix",
+      "black"
+    ]
+  }
+}

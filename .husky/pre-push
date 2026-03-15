@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+
+echo "🧪 Pre-push — Tests Vitest..."
+
+cd frontend
+npm run test -- --run
+if [ $? -ne 0 ]; then
+  echo "❌ Les tests ont échoué. Push bloqué."
+  exit 1
+fi
+
+echo "✅ Pre-push OK — tous les tests passent"

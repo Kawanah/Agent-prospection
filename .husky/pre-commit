@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+
+ROOT=$(git rev-parse --show-toplevel)
+echo "🔍 Pre-commit — Prettier + ESLint + Ruff..."
+
+# ── Frontend : ESLint + Prettier ──────────────────────────────────────────────
+# Fichiers JS/JSX stagés (chemin depuis la racine)
+STAGED_JS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "^frontend/src/.*\.(js|jsx)$" || true)
+
+if [ -n "$STAGED_JS" ]; then
+  echo "  → ESLint sur les fichiers JS/JSX modifiés..."
+  # Passer les chemins relatifs au répertoire frontend
+  JS_REL=$(echo "$STAGED_JS" | sed 's|^frontend/||')
+  cd "$ROOT/frontend"
+  echo "$JS_REL" | xargs npx eslint --max-warnings=0
+  if [ $? -ne 0 ]; then
+    echo "❌ ESLint a trouvé des erreurs. Corrigez avant de committer."
+    exit 1
+  fi
+  cd "$ROOT"
+fi
+
+# Tous les fichiers front stagés (JS/JSX/CSS)
+STAGED_FRONT=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "^frontend/src/.*\.(js|jsx|css)$" || true)
+
+if [ -n "$STAGED_FRONT" ]; then
+  echo "  → Prettier sur les fichiers front modifiés..."
+  FRONT_REL=$(echo "$STAGED_FRONT" | sed 's|^frontend/||')
+  cd "$ROOT/frontend"
+  echo "$FRONT_REL" | xargs npx prettier --write
+  # Re-stager depuis la racine avec les chemins complets
+  cd "$ROOT"
+  echo "$STAGED_FRONT" | xargs git add
+fi
+
+# ── Backend : Ruff + Black ────────────────────────────────────────────────────
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "^app/.*\.py$" || true)
+
+if [ -n "$STAGED_PY" ]; then
+  cd "$ROOT"
+  echo "  → Ruff sur les fichiers Python modifiés..."
+  if command -v ruff > /dev/null 2>&1; then
+    echo "$STAGED_PY" | xargs ruff check --fix
+    if [ $? -ne 0 ]; then
+      echo "❌ Ruff a trouvé des erreurs non auto-corrigibles."
+      exit 1
+    fi
+  fi
+
+  echo "  → Black sur les fichiers Python modifiés..."
+  if command -v black > /dev/null 2>&1; then
+    echo "$STAGED_PY" | xargs black
+  fi
+
+  echo "$STAGED_PY" | xargs git add
+fi
+
+echo "✅ Pre-commit OK"

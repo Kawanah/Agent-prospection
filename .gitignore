@@ -1,0 +1,65 @@
+# Environnement Python
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Variables d'environnement (IMPORTANT - contient les clés API)
+.env
+
+# Base de données locale
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Tests
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Fichiers temporaires
+tmp/
+temp/
+*.tmp
+
+# Node.js (racine + frontend)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Coverage
+frontend/coverage/
+.nyc_output/
+
+# Husky (ne pas committer le cache)
+.husky/_/
