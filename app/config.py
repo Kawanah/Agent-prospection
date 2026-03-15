@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     linkedin_email: str = ""
     linkedin_password: str = ""
 
+    # CORS — origines autorisées en production (séparées par des virgules)
+    allowed_origins: str = ""
+
     # Authentication JWT
     secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
     jwt_algorithm: str = "HS256"

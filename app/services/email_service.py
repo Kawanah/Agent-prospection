@@ -2,6 +2,7 @@
 Service d'envoi d'emails via SMTP.
 """
 
+import html
 import re
 import smtplib
 import ssl
@@ -182,7 +183,7 @@ def send_prospection_email(
     </head>
     <body>
         <div class="container">
-            {body.replace(chr(10), '<br>')}
+            {html.escape(body).replace(chr(10), '<br>')}
             <div class="footer">
                 <p>Cet email a été envoyé par l'Agent de Prospection Kawanah Travel.</p>
             </div>
