@@ -3,19 +3,22 @@ Endpoint d'authentification — génère un token JWT.
 Route publique : POST /api/auth/login
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import Depends
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
-from app.auth import verify_password, create_access_token, get_current_user
+from app.auth import create_access_token, get_current_user, verify_password
 from app.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("10/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Authentification admin.
     Retourne un token JWT Bearer valable 24h.
