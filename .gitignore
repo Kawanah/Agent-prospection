@@ -24,6 +24,13 @@ data/*.db
 *.swo
 *~
 
+# AI assistants & IDE plugins (per-machine config, not portable)
+.agent/
+.agents/
+.claude/
+.cursor/
+.windsurf/
+
 # Logs
 *.log
 logs/
