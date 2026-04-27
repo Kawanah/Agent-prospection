@@ -68,16 +68,29 @@ class EmailService:
         subject: str,
         body: str,
         html_body: Optional[str] = None,
+        force_send: bool = False,
     ) -> EmailResult:
         """
         Envoie un email.
 
-        Args:
-            to_email: Adresse email du destinataire
-            subject: Objet de l'email
-            body: Corps de l'email (texte brut)
-            html_body: Corps HTML (optionnel)
+        SÉCURITÉ : En mode development, les envois sont bloqués sauf si
+        force_send=True ou si l'objet contient [TEST].
         """
+        # Garde-fou : bloquer l'envoi réel en mode dev
+        is_test_email = "[TEST]" in (subject or "")
+        if settings.app_env != "production" and not force_send and not is_test_email:
+            logger.warning(
+                f"⚠️ ENVOI BLOQUÉ (mode {settings.app_env}) - "
+                f"Destinataire: {to_email}, Objet: {subject}"
+            )
+            return EmailResult(
+                success=False,
+                to_email=to_email,
+                subject=subject,
+                error=f"Envoi bloqué en mode {settings.app_env}. "
+                f"Passez APP_ENV=production ou utilisez force_send.",
+            )
+
         if not self.is_configured():
             return EmailResult(
                 success=False,
@@ -105,15 +118,22 @@ class EmailService:
                 part2 = MIMEText(html_body, "html", "utf-8")
                 message.attach(part2)
 
-            # Connexion SMTP avec TLS — certificats vérifiés via certifi
+            # Connexion SMTP — SSL direct (port 465) ou STARTTLS (port 587)
             context = ssl.create_default_context(cafile=certifi.where())
 
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.ehlo()
-                server.login(self.smtp_user, self.smtp_password)
-                server.sendmail(self.email_from, to_email, message.as_string())
+            if self.smtp_port == 465:
+                with smtplib.SMTP_SSL(
+                    self.smtp_host, self.smtp_port, context=context
+                ) as server:
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.sendmail(self.email_from, to_email, message.as_string())
+            else:
+                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.sendmail(self.email_from, to_email, message.as_string())
 
             logger.info(f"✅ Email envoyé à {to_email}: {subject}")
 
@@ -157,39 +177,69 @@ class EmailService:
         return results
 
 
+def _linkify(text: str) -> str:
+    """Convertit les URLs en liens cliquables dans un texte HTML déjà échappé."""
+    # Détecte les URLs (http/https et les domaines nus type travel.kawanah.com)
+    url_pattern = re.compile(
+        r'(https?://[^\s<>"]+|(?<!\w)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s<>"]*)?)'
+    )
+
+    def replace_url(m):
+        url = m.group(0)
+        href = url if url.startswith("http") else f"https://{url}"
+        return f'<a href="{href}" style="color:#1a6b8a;text-decoration:none;">{url}</a>'
+
+    return url_pattern.sub(replace_url, text)
+
+
 def send_prospection_email(
     to_email: str,
-    lead_name: str,
     subject: str,
     body: str,
+    force_send: bool = False,
 ) -> EmailResult:
     """
     Envoie un email de prospection.
     Helper function pour l'API.
+
+    SÉCURITÉ : En mode development (APP_ENV != 'production'), les emails ne partent PAS
+    sauf si force_send=True est explicitement passé via l'API.
     """
+    # Garde-fou : bloquer l'envoi réel en dev sauf demande explicite
+    if settings.app_env != "production" and not force_send:
+        logger.warning(
+            f"⚠️ ENVOI BLOQUÉ (mode {settings.app_env}) - Destinataire: {to_email}, Objet: {subject}. "
+            f"Passez force_send=true pour envoyer réellement."
+        )
+        return EmailResult(
+            success=False,
+            to_email=to_email,
+            subject=subject,
+            error=f"Envoi bloqué en mode {settings.app_env}. Passez en production ou utilisez force_send=true pour confirmer.",
+        )
+
     service = EmailService()
 
-    # Créer une version HTML simple
-    html_body = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            {html.escape(body).replace(chr(10), '<br>')}
-            <div class="footer">
-                <p>Cet email a été envoyé par l'Agent de Prospection Kawanah Travel.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+    # Convertir le corps en HTML avec liens cliquables
+    escaped = html.escape(body)
+    html_content = _linkify(escaped).replace("\n", "<br>")
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: Georgia, serif; line-height: 1.7; color: #222; background: #fff; }}
+        .container {{ max-width: 560px; margin: 0 auto; padding: 32px 24px; }}
+        p {{ margin: 0 0 12px; }}
+        .signature {{ margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; font-size: 13px; color: #555; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {html_content}
+    </div>
+</body>
+</html>"""
 
     return service.send_email(to_email, subject, body, html_body)

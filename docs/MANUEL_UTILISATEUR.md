@@ -1,8 +1,8 @@
-# Manuel Utilisateur — Agent Prospection Kawanah Travel
+# Manuel Utilisateur — Agent Prospection Kawanah Tourisme
 
 ## Introduction
 
-L'**Agent Prospection Kawanah Travel** est un outil de prospection automatisé pour le secteur de l'hospitalité (hôtels, campings, gîtes, résidences). Il permet d'identifier, enrichir et contacter des prospects pour leur proposer les services de création web de Kawanah Travel.
+L'**Agent Prospection Kawanah Tourisme** est un outil de prospection automatisé pour le secteur de l'hospitalité (hôtels, campings, gîtes, résidences). Il permet d'identifier, enrichir et contacter des prospects pour leur proposer les services de création web de Kawanah Tourisme.
 
 ---
 

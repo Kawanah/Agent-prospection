@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Configuration de l'application chargée depuis les variables d'environnement."""
 
     # Application
-    app_name: str = "Agent Prospection Kawanah Travel"
+    app_name: str = "Agent Prospection Kawanah Tourisme"
     app_env: str = "development"
     debug: bool = False
 
@@ -24,9 +24,20 @@ class Settings(BaseSettings):
     # Enrichissement
     hunter_api_key: str = ""
     dropcontact_api_key: str = ""
+    pappers_api_key: str = (
+        ""  # Pappers.fr — données légales françaises (dirigeants, SIREN)
+    )
 
-    # Google Places API (pour les avis Google)
+    # DataForSEO (analyse SEO réelle — mots-clés positionnés, trafic organique)
+    dataforseo_login: str = ""
+    dataforseo_password: str = ""
+
+    # Google Places API (avis Google + source de leads)
     google_places_api_key: str = ""
+
+    # DATAtourisme (source de leads : gîtes, chambres d'hôtes, activités)
+    # Inscription gratuite : https://www.datatourisme.fr/obtenir-et-utiliser-la-donnee/
+    datatourisme_api_key: str = ""
 
     # Email
     smtp_host: str = "smtp.gmail.com"
@@ -44,6 +55,9 @@ class Settings(BaseSettings):
 
     # CORS — origines autorisées en production (séparées par des virgules)
     allowed_origins: str = ""
+
+    # Prise de rendez-vous
+    booking_link: str = "https://app.lemcal.com/@kawanah/travel"
 
     # Authentication JWT
     secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"

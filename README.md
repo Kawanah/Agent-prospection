@@ -1,4 +1,4 @@
-# Agent de Prospection — Kawanah Travel
+# Agent de Prospection — Kawanah Tourisme
 
 Outil de prospection B2B automatisé pour le secteur de l'hospitalité. Identifie, enrichit et contacte des prospects pour leur proposer des services de création web.
 

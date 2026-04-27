@@ -169,6 +169,21 @@ async def register_inbound_message(
         sentiment=SentimentType.UNKNOWN,
     )
     db.add(message)
+
+    # Incrémenter le compteur de réponses si lié à un message parent avec campagne
+    if message_data.parent_message_id:
+        parent_result = await db.execute(
+            select(Message).where(Message.id == message_data.parent_message_id)
+        )
+        parent = parent_result.scalar_one_or_none()
+        if parent and parent.campaign_id:
+            campaign_result = await db.execute(
+                select(Campaign).where(Campaign.id == parent.campaign_id)
+            )
+            campaign = campaign_result.scalar_one_or_none()
+            if campaign:
+                campaign.responses_received += 1
+
     await db.commit()
     await db.refresh(message)
 
@@ -240,6 +255,16 @@ async def mark_message_sent(message_id: int, db: AsyncSession = Depends(get_db))
 
     message.status = MessageStatus.SENT
     message.sent_at = datetime.utcnow()
+
+    # Incrémenter le compteur de la campagne associée
+    if message.campaign_id:
+        campaign_result = await db.execute(
+            select(Campaign).where(Campaign.id == message.campaign_id)
+        )
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign:
+            campaign.emails_sent += 1
+
     await db.commit()
 
     return {"message": f"Message {message_id} marqué comme envoyé", "status": "sent"}
@@ -258,6 +283,16 @@ async def mark_message_opened(message_id: int, db: AsyncSession = Depends(get_db
 
     message.status = MessageStatus.OPENED
     message.opened_at = datetime.utcnow()
+
+    # Incrémenter le compteur de la campagne associée
+    if message.campaign_id:
+        campaign_result = await db.execute(
+            select(Campaign).where(Campaign.id == message.campaign_id)
+        )
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign:
+            campaign.emails_opened += 1
+
     await db.commit()
 
     return {"message": f"Message {message_id} marqué comme ouvert", "status": "opened"}

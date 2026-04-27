@@ -1,5 +1,5 @@
 """
-Authentification JWT pour l'API Kawanah Travel.
+Authentification JWT pour l'API Kawanah Tourisme.
 - Token Bearer (OAuth2)
 - Admin unique configuré via .env
 - Expiration configurable (défaut : 24h)

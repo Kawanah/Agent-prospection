@@ -39,7 +39,7 @@ class MessageRequest(BaseModel):
 
     channel: str = "email"  # email ou linkedin
     tone: str = "friendly"  # professional, friendly, direct
-    sender_name: str = "L'équipe Kawanah Travel"
+    sender_name: str = "L'équipe Kawanah Tourisme"
     custom_instructions: Optional[str] = None
 
     @field_validator("custom_instructions")

@@ -1,7 +1,8 @@
 """
-Point d'entrée de l'API FastAPI - Agent de Prospection Kawanah Travel.
+Point d'entrée de l'API FastAPI - Agent de Prospection Kawanah Tourisme.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -13,11 +14,40 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import get_settings
-from app.database import init_db
+from app.database import init_db, engine, Base, async_session
+from app.models.import_batch import (
+    ImportBatch,
+)  # noqa: F401 — nécessaire pour create_all
 
 limiter = Limiter(key_func=get_remote_address)
 
 settings = get_settings()
+
+# ─── Scheduler automatique de la file d'envoi ────────────────────────────────
+
+QUEUE_INTERVAL_SECONDS = 5 * 60  # toutes les 5 minutes
+
+
+async def _auto_process_queue():
+    """
+    Tâche de fond : traite la file d'envoi toutes les QUEUE_INTERVAL_SECONDS secondes.
+    Lance les emails planifiés dont l'heure est venue, dans la limite du quota journalier.
+    """
+    from app.services.sequence_service import SequenceService
+
+    service = SequenceService()
+
+    while True:
+        await asyncio.sleep(QUEUE_INTERVAL_SECONDS)
+        try:
+            async with async_session() as db:
+                result = await service.process_queue(db)
+                if result.get("sent", 0) > 0:
+                    logger.info(f"[Auto-queue] {result['sent']} emails envoyés")
+                elif result.get("quota_reached"):
+                    logger.info(f"[Auto-queue] Quota journalier atteint")
+        except Exception as e:
+            logger.error(f"[Auto-queue] Erreur: {e}")
 
 
 @asynccontextmanager
@@ -27,14 +57,21 @@ async def lifespan(app: FastAPI):
     logger.info(f"Démarrage de {settings.app_name}...")
     await init_db()
     logger.info("Base de données initialisée.")
+
+    # Lancer le scheduler d'envoi en arrière-plan
+    queue_task = asyncio.create_task(_auto_process_queue())
+    logger.info(f"Scheduler d'envoi démarré (intervalle : {QUEUE_INTERVAL_SECONDS}s)")
+
     yield
+
     # Shutdown
+    queue_task.cancel()
     logger.info("Arrêt de l'application...")
 
 
 app = FastAPI(
     title=settings.app_name,
-    description="Agent de prospection automatisé pour le secteur hospitalité - Kawanah Travel",
+    description="Agent de prospection automatisé pour le secteur hospitalité - Kawanah Tourisme",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -48,10 +85,20 @@ _DEV_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:5177",
+    "http://localhost:5178",
+    "http://localhost:5179",
+    "http://localhost:5180",
     "http://localhost:4173",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+    "http://127.0.0.1:5177",
+    "http://127.0.0.1:5178",
+    "http://127.0.0.1:5179",
+    "http://127.0.0.1:5180",
 ]
 
 _PROD_ORIGINS = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
@@ -116,6 +163,7 @@ from app.api import (
     agent,
     reviews,
     gouv_data,
+    sources,
 )
 from app.api import settings as settings_api
 from app.api import auth as auth_api
@@ -168,3 +216,22 @@ app.include_router(
     tags=["Import data.gouv.fr"],
     dependencies=_auth,
 )
+app.include_router(
+    sources.router,
+    prefix="/api/sources",
+    tags=["Nouvelles sources de leads"],
+    dependencies=_auth,
+)
+
+
+@app.post("/api/admin/purge", tags=["Admin"], dependencies=_auth)
+async def purge_all_data():
+    """Vide toutes les tables sans supprimer la structure."""
+    async with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
+    logger.info("Toutes les données ont été purgées.")
+    return {
+        "message": "Toutes les données ont été effacées",
+        "tables_purged": [t.name for t in Base.metadata.sorted_tables],
+    }
