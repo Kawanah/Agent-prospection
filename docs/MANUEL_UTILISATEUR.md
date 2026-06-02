@@ -29,7 +29,7 @@ Puis ouvrir **http://localhost:5173** dans le navigateur.
 
 ### Connexion
 
-Identifiants : `admin` / `kawanah2026`
+Utiliser l'identifiant admin configuré dans `.env` (`ADMIN_USERNAME` et `ADMIN_PASSWORD_HASH`).
 
 Le token de session dure 24h. Passé ce délai, la page de connexion réapparaît automatiquement.
 

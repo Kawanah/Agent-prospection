@@ -14,8 +14,10 @@ import {
   MessageSquare,
   Plus,
 } from 'lucide-react';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { campaignsApi } from '../api/campaigns';
+import { leadsApi } from '../api/leads';
+import { messagesApi } from '../api/messages';
+import { useToast } from '../hooks/useToast';
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -54,8 +56,8 @@ function GenerateModal({ onClose, onSaved }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    axios
-      .get(`${API_URL}/api/leads/`, { params: { per_page: 100, page: 1 } })
+    leadsApi
+      .list({ per_page: 100, page: 1 })
       .then((r) => setLeads(r.data.leads || []))
       .catch(() => {});
   }, []);
@@ -66,10 +68,10 @@ function GenerateModal({ onClose, onSaved }) {
     setError(null);
     setGenerated(null);
     try {
-      const res = await axios.post(`${API_URL}/api/ai/generate/${selectedLead}`, {
+      const res = await messagesApi.generate(selectedLead, {
         channel,
         tone,
-        sender_name: "L'équipe Kawanah Travel",
+        sender_name: "L'équipe Kawanah Tourisme",
       });
       setGenerated(res.data);
       setEditedBody(res.data.body);
@@ -84,7 +86,7 @@ function GenerateModal({ onClose, onSaved }) {
     if (!generated) return;
     setSaving(true);
     try {
-      await axios.post(`${API_URL}/api/messages/`, {
+      await messagesApi.create({
         lead_id: generated.lead_id,
         channel,
         subject: generated.subject,
@@ -265,7 +267,7 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [toast, setToast] = useState(null);
+  const { toast, showToast } = useToast();
   const [copied, setCopied] = useState(null);
   const [testingId, setTestingId] = useState(null);
   const [testEmail, setTestEmail] = useState('');
@@ -281,23 +283,19 @@ export default function Messages() {
     try {
       const params = { per_page: 100, page: 1 };
       if (campaignId) params.campaign_id = campaignId;
-      const res = await axios.get(`${API_URL}/api/messages/`, { params });
+      const res = await messagesApi.list(params);
       const msgs = res.data.messages || [];
       setMessages(msgs);
-      // Charger les noms des leads
+      // Charger les noms des leads en un seul appel
       const uniqueLeadIds = [...new Set(msgs.map((m) => m.lead_id).filter(Boolean))];
-      const names = {};
-      await Promise.all(
-        uniqueLeadIds.map(async (id) => {
-          try {
-            const r = await axios.get(`${API_URL}/api/leads/${id}`);
-            names[id] = r.data.name || `Lead #${id}`;
-          } catch {
-            names[id] = `Lead #${id}`;
-          }
-        })
-      );
-      setLeadNames(names);
+      if (uniqueLeadIds.length > 0) {
+        try {
+          const r = await leadsApi.names(uniqueLeadIds.join(','));
+          setLeadNames(r.data);
+        } catch {
+          /* fallback : pas de noms */
+        }
+      }
     } catch {
       setError('Impossible de charger les messages. Vérifiez que le backend tourne.');
     } finally {
@@ -306,8 +304,8 @@ export default function Messages() {
   }, []);
 
   useEffect(() => {
-    axios
-      .get(`${API_URL}/api/campaigns/`, { params: { per_page: 50 } })
+    campaignsApi
+      .list({ per_page: 50 })
       .then((r) => setCampaigns(r.data.campaigns || []))
       .catch(() => {});
   }, []);
@@ -315,11 +313,6 @@ export default function Messages() {
   useEffect(() => {
     fetchMessages(selectedCampaign);
   }, [fetchMessages, selectedCampaign]);
-
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const handleCopy = (id, body) => {
     navigator.clipboard.writeText(body);
@@ -329,7 +322,7 @@ export default function Messages() {
 
   const handleQueue = async (id) => {
     try {
-      await axios.post(`${API_URL}/api/messages/${id}/queue`);
+      await messagesApi.queue(id);
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, status: 'queued' } : m)));
       showToast("Message mis en file d'attente");
     } catch (err) {
@@ -341,7 +334,7 @@ export default function Messages() {
     if (!testEmail.trim()) return;
     setTestSending(true);
     try {
-      await axios.post(`${API_URL}/api/messages/${id}/send-test`, { to_email: testEmail });
+      await messagesApi.sendTest(id, testEmail);
       showToast(`Email de test envoyé à ${testEmail}`);
       setTestingId(null);
       setTestEmail('');
@@ -378,7 +371,7 @@ export default function Messages() {
             className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-green-600 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg"
           >
             <CheckCircle className="w-4 h-4" />
-            {toast}
+            {toast.msg || toast.message || toast}
           </motion.div>
         )}
       </AnimatePresence>

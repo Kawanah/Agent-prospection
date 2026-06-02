@@ -1,7 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { campaignsApi } from '../api/campaigns';
+import { enrichmentApi } from '../api/enrichment';
+import { leadsApi } from '../api/leads';
+import {
+  DEPT_NAMES,
+  QUALIF_FILTERS,
+  STATUS_FILTERS,
+  STATUS_LABELS,
+  TYPE_EMOJI,
+  TYPE_LABELS,
+  TYPE_TABS,
+  getQualification,
+} from '../features/leads/leadMetadata';
+import { QualifBadge, ScoreBadge } from '../features/leads/LeadBadges';
+import { useToast } from '../hooks/useToast';
 import {
   Users,
   Search,
@@ -24,6 +37,8 @@ import {
   Tag,
   Activity,
   Calendar,
+  Send,
+  Target,
 } from 'lucide-react';
 
 const fadeUp = {
@@ -32,180 +47,180 @@ const fadeUp = {
   transition: { duration: 0.3 },
 };
 
-const TYPE_LABELS = {
-  hotel: 'Hôtel',
-  camping: 'Camping',
-  gite: 'Gîte',
-  residence: 'Résidence',
-  chambre_hotes: "Ch. d'hôtes",
-  other: 'Autre',
-};
+function SelectCampaignModal({ lead, onClose, onSuccess }) {
+  const [campaigns, setCampaigns] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
 
-const TYPE_EMOJI = {
-  hotel: '🏨',
-  camping: '⛺',
-  gite: '🏡',
-  residence: '🏢',
-  chambre_hotes: '🛏️',
-  other: '🏠',
-};
+  useEffect(() => {
+    campaignsApi
+      .list()
+      .then((r) => {
+        const active = (r.data.campaigns || []).filter((c) => c.status !== 'completed');
+        setCampaigns(active);
+        if (active.length > 0) setSelectedId(active[0].id);
+      })
+      .catch(() => setError('Impossible de charger les campagnes'))
+      .finally(() => setLoading(false));
+  }, []);
 
-// ─── Calcul de la qualification ───────────────────────────────────────────────
-// Règles (par priorité) :
-// 1. has_website=false (confirmé après enrichissement) → SANS SITE
-// 2. has_website=null ET website=null → NON ANALYSÉ (pas encore enrichi)
-// 3. has_website=null ET website existe (URL connue mais non vérifiée) → À ANALYSER
-// 4. has_website=true ou website_quality_score connu → score chaud/tiède/froid
-// Les avis Google sont intégrés dans le score backend (google_reviews_count, google_rating).
-function getQualification(lead) {
-  // Cas 1 : enrichissement confirmé → pas de site web
-  if (lead.has_website === false) {
-    return {
-      label: 'SANS SITE',
-      short: 'Sans site',
-      bg: 'bg-red-100',
-      text: 'text-red-700',
-      dot: 'bg-red-500',
-      border: 'border-red-200',
-      emoji: '🔥',
-    };
-  }
-
-  // Cas 2 : pas encore analysé du tout (aucune URL, aucune vérification)
-  const invalidUrls = ['', '-', 'n/a', 'na', 'none', 'null'];
-  const hasValidUrl =
-    lead.website &&
-    !invalidUrls.includes(lead.website.toLowerCase().trim()) &&
-    lead.website.trim().length > 3;
-
-  if (!hasValidUrl && lead.has_website === null) {
-    return {
-      label: 'NON ANALYSÉ',
-      short: 'Non analysé',
-      bg: 'bg-slate-100',
-      text: 'text-slate-600',
-      dot: 'bg-slate-400',
-      border: 'border-slate-200',
-      emoji: '❓',
-    };
-  }
-
-  // Cas 3 : URL connue mais site pas encore vérifié
-  if (hasValidUrl && lead.has_website === null && lead.website_quality_score === null) {
-    return {
-      label: 'À ANALYSER',
-      short: 'À analyser',
-      bg: 'bg-orange-100',
-      text: 'text-orange-700',
-      dot: 'bg-orange-400',
-      border: 'border-orange-200',
-      emoji: '⚠️',
-    };
-  }
-
-  // Cas 4 : lead analysé → qualification par score
-  // (le score inclut : qualité site, SEO, GEO, avis Google, taille établissement)
-  if (lead.score >= 70) {
-    return {
-      label: 'CHAUD',
-      short: 'Chaud',
-      bg: 'bg-red-50',
-      text: 'text-red-600',
-      dot: 'bg-red-400',
-      border: 'border-red-100',
-      emoji: '🔥',
-    };
-  }
-  if (lead.score >= 40) {
-    return {
-      label: 'TIÈDE',
-      short: 'Tiède',
-      bg: 'bg-amber-50',
-      text: 'text-amber-700',
-      dot: 'bg-amber-400',
-      border: 'border-amber-100',
-      emoji: '😐',
-    };
-  }
-  return {
-    label: 'FROID',
-    short: 'Froid',
-    bg: 'bg-blue-50',
-    text: 'text-blue-600',
-    dot: 'bg-blue-400',
-    border: 'border-blue-100',
-    emoji: '❄️',
+  const handleConfirm = async () => {
+    if (!selectedId) return;
+    setSending(true);
+    setError(null);
+    try {
+      await campaignsApi.addLeads(selectedId, [lead.id]);
+      onSuccess('Lead ajouté à la campagne avec succès');
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Erreur lors de l'ajout");
+    } finally {
+      setSending(false);
+    }
   };
-}
 
-function ScoreBadge({ score }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="relative w-8 h-8">
-        <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
-          <circle cx="16" cy="16" r="13" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-          <circle
-            cx="16"
-            cy="16"
-            r="13"
-            fill="none"
-            stroke={score >= 70 ? '#ef4444' : score >= 40 ? '#f59e0b' : '#94a3b8'}
-            strokeWidth="3"
-            strokeDasharray={`${(score / 100) * 81.7} 81.7`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-primary-800">
-          {score}
-        </span>
-      </div>
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-accent-50">
+              <Target className="w-4 h-4 text-accent-600" />
+            </div>
+            <h3 className="font-bold text-primary-900 text-base">Choisir une campagne</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-4 h-4 text-primary-500" />
+          </button>
+        </div>
+
+        <p className="text-sm text-primary-500 mb-4">
+          Ajouter <span className="font-semibold text-primary-800">{lead.name}</span> à :
+        </p>
+
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 text-accent-500 animate-spin" />
+          </div>
+        ) : campaigns.length === 0 ? (
+          <div className="text-center py-6">
+            <Target className="w-8 h-8 text-primary-300 mx-auto mb-2" />
+            <p className="text-sm text-primary-500">Aucune campagne active</p>
+            <a
+              href="/campaigns"
+              className="text-xs text-accent-600 hover:underline mt-1 inline-block"
+            >
+              Créer une campagne →
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-2 mb-5">
+            {campaigns.map((c) => (
+              <label
+                key={c.id}
+                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors
+                  ${
+                    selectedId === c.id
+                      ? 'border-accent-400 bg-accent-50'
+                      : 'border-primary-200 hover:bg-primary-50'
+                  }`}
+              >
+                <input
+                  type="radio"
+                  name="campaign"
+                  value={c.id}
+                  checked={selectedId === c.id}
+                  onChange={() => setSelectedId(c.id)}
+                  className="accent-accent-500"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-primary-900 truncate">{c.name}</p>
+                  <p className="text-xs text-primary-400 capitalize">
+                    {c.channel} · {c.status}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 text-red-600 text-xs p-2.5 bg-red-50 rounded-lg border border-red-200 mb-4">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-primary-200 text-primary-600 text-sm font-medium hover:bg-primary-50 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!selectedId || sending || campaigns.length === 0}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-semibold hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Envoyer
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
 
-function QualifBadge({ lead }) {
-  const q = getQualification(lead);
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${q.bg} ${q.text} ${q.border}`}
-    >
-      <span className="text-[10px]">{q.emoji}</span>
-      {q.short}
-    </span>
-  );
-}
-
-const QUALIF_FILTERS = [
-  { value: '', label: 'Tous' },
-  { value: 'sans_site', label: '🔥 Sans site' },
-  { value: 'a_analyser', label: '⚠️ À analyser' },
-  { value: 'non_analyse', label: '❓ Non analysé' },
-  { value: 'chaud', label: '🔥 Chaud' },
-  { value: 'tiede', label: '😐 Tiède' },
-  { value: 'froid', label: '❄️ Froid' },
-];
-
-const STATUS_FILTERS = [
-  { value: '', label: 'Tous les statuts' },
-  { value: 'enriched', label: '✅ Enrichis' },
-  { value: 'new', label: '🆕 Nouveaux' },
-  { value: 'contacted', label: '📧 Contactés' },
-  { value: 'responded', label: '💬 Ont répondu' },
-  { value: 'interested', label: '⭐ Intéressés' },
-];
-
-const STATUS_LABELS = {
-  new: { label: 'Nouveau', cls: 'bg-slate-100 text-slate-600' },
-  enriched: { label: 'Enrichi', cls: 'bg-blue-100 text-blue-700' },
-  contacted: { label: 'Contacté', cls: 'bg-amber-100 text-amber-700' },
-  replied: { label: 'A répondu', cls: 'bg-green-100 text-green-700' },
-  converted: { label: 'Converti', cls: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: 'Rejeté', cls: 'bg-red-100 text-red-600' },
-};
-
-function LeadDetailModal({ lead, onClose, onEnrich, enrichingId }) {
+function LeadDetailModal({ lead, onClose, onEnrich, enrichingId, onAddToCampaign, onNotesSaved }) {
   const q = getQualification(lead);
   const status = STATUS_LABELS[lead.status] || STATUS_LABELS.new;
+  const [strongArgs, setStrongArgs] = useState([]);
+  const [notes, setNotes] = useState(lead.notes || '');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
+
+  useEffect(() => {
+    setNotes(lead.notes || '');
+  }, [lead.id, lead.notes]);
+
+  useEffect(() => {
+    if (lead?.id) {
+      leadsApi
+        .strongArguments(lead.id)
+        .then((r) => setStrongArgs(r.data?.arguments || []))
+        .catch(() => {});
+    }
+  }, [lead?.id]);
+
+  const handleSaveNotes = async () => {
+    setNotesSaving(true);
+    try {
+      await leadsApi.updateNotes(lead.id, notes);
+      setNotesSaved(true);
+      onNotesSaved(lead.id, notes);
+      setTimeout(() => setNotesSaved(false), 2000);
+    } catch {
+      // silencieux
+    } finally {
+      setNotesSaving(false);
+    }
+  };
 
   return (
     <div
@@ -269,6 +284,19 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId }) {
             </div>
           )}
 
+          {/* Alerte contact alternatif */}
+          {lead.status === 'no_email' && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-800">
+              <span className="text-base flex-shrink-0">📞</span>
+              <div>
+                <p className="font-semibold">Contacter autrement</p>
+                <p className="text-xs text-orange-600 mt-0.5">
+                  Aucun email trouvé. Utilisez le téléphone ou LinkedIn ci-dessous.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Contact */}
           <div className="grid grid-cols-1 gap-2">
             {lead.email && (
@@ -281,10 +309,18 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId }) {
               </a>
             )}
             {lead.phone && (
-              <div className="flex items-center gap-2 text-sm text-primary-700">
-                <Phone className="w-4 h-4 text-primary-400 flex-shrink-0" />
+              <a
+                href={`tel:${lead.phone.replace(/\s/g, '')}`}
+                className={`flex items-center gap-2 text-sm ${lead.status === 'no_email' ? 'text-orange-700 font-semibold hover:text-orange-800' : 'text-primary-700 hover:text-primary-900'}`}
+              >
+                <Phone
+                  className={`w-4 h-4 flex-shrink-0 ${lead.status === 'no_email' ? 'text-orange-500' : 'text-primary-400'}`}
+                />
                 {lead.phone}
-              </div>
+                {lead.status === 'no_email' && (
+                  <span className="text-xs text-orange-500 ml-1">← Appeler</span>
+                )}
+              </a>
             )}
             {lead.website && !['', '-'].includes(lead.website) && (
               <a
@@ -331,6 +367,189 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId }) {
             </div>
           )}
 
+          {/* Nouvelles Entreprises — Infos RCS */}
+          {lead.is_nouvelle_entreprise && (
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+                  🆕 Nouvelle Entreprise
+                </span>
+                {lead.rcs_score != null && (
+                  <span
+                    className={`text-sm font-bold px-2 py-0.5 rounded-full ${
+                      lead.rcs_score >= 4
+                        ? 'bg-emerald-200 text-emerald-800'
+                        : lead.rcs_score >= 2
+                          ? 'bg-teal-100 text-teal-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    RCS {lead.rcs_score}/5
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {lead.forme_juridique && (
+                  <div>
+                    <span className="text-emerald-500">Forme :</span>{' '}
+                    <span className="font-medium text-primary-800">{lead.forme_juridique}</span>
+                  </div>
+                )}
+                {lead.capital != null && (
+                  <div>
+                    <span className="text-emerald-500">Capital :</span>{' '}
+                    <span className="font-medium text-primary-800">
+                      {lead.capital.toLocaleString('fr-FR')} €
+                    </span>
+                  </div>
+                )}
+                {lead.siren && (
+                  <div>
+                    <span className="text-emerald-500">SIREN :</span>{' '}
+                    <span className="font-mono text-primary-700">{lead.siren}</span>
+                  </div>
+                )}
+              </div>
+              {lead.objet_social && (
+                <div className="text-xs">
+                  <span className="text-emerald-500 font-medium">Objet social :</span>
+                  <p className="text-primary-700 mt-0.5 leading-relaxed">{lead.objet_social}</p>
+                </div>
+              )}
+              {lead.bodacc_activite && (
+                <div className="text-xs">
+                  <span className="text-emerald-500 font-medium">Activité BODACC :</span>
+                  <p className="text-primary-700 mt-0.5 leading-relaxed">{lead.bodacc_activite}</p>
+                </div>
+              )}
+              {lead.domiciliation && (
+                <div className="text-xs flex items-start gap-1">
+                  <span className="text-emerald-500">Domiciliation :</span>
+                  <span className="text-primary-700">{lead.domiciliation}</span>
+                  {lead.is_domiciliataire && (
+                    <span className="ml-1 text-orange-600 font-semibold whitespace-nowrap">
+                      ⚠ Domiciliataire
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Score détaillé */}
+          {lead.score !== undefined && (
+            <div className="p-4 bg-primary-50 rounded-xl border border-primary-100">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-primary-800 flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-accent-500" /> Potentiel commercial
+                </span>
+                <span
+                  className={`text-sm font-bold ${lead.score >= 70 ? 'text-red-600' : lead.score >= 40 ? 'text-amber-600' : 'text-slate-500'}`}
+                >
+                  {lead.score}/100
+                </span>
+              </div>
+              <div className="space-y-2 text-xs">
+                {[
+                  {
+                    label: 'Présence web',
+                    pts: lead.has_website === false ? 35 : lead.has_website === true ? 0 : 15,
+                    max: 35,
+                    note:
+                      lead.has_website === false
+                        ? 'Pas de site = fort potentiel'
+                        : lead.has_website === true
+                          ? 'A déjà un site'
+                          : 'Non vérifié',
+                  },
+                  {
+                    label: 'Qualité du site',
+                    pts:
+                      lead.website_quality_score != null
+                        ? Math.round(lead.website_quality_score * 0.4)
+                        : null,
+                    max: 40,
+                    note:
+                      lead.website_quality_score != null
+                        ? `Score : ${lead.website_quality_score}/100`
+                        : 'Non analysé',
+                  },
+                  {
+                    label: 'Avis Google',
+                    pts:
+                      lead.google_rating != null
+                        ? Math.round(
+                            ((lead.google_rating / 5) * 0.5 +
+                              Math.min((lead.google_reviews_count || 0) / 200, 0.5)) *
+                              20
+                          )
+                        : null,
+                    max: 20,
+                    note:
+                      lead.google_rating != null
+                        ? `${lead.google_rating}/5 · ${lead.google_reviews_count ?? 0} avis`
+                        : 'Non disponible',
+                  },
+                  {
+                    label: 'Classement / étoiles',
+                    pts: lead.star_rating ? 15 : null,
+                    max: 15,
+                    note: lead.star_rating || 'Non classé',
+                  },
+                ].map(({ label, pts, max, note }) => (
+                  <div key={label}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-primary-600">{label}</span>
+                      <span className="text-primary-500">
+                        {pts != null ? `${pts}/${max}` : '—'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-primary-200 rounded-full h-1.5">
+                      <div
+                        className="h-1.5 rounded-full bg-accent-400 transition-all"
+                        style={{
+                          width: pts != null ? `${Math.round((pts / max) * 100)}%` : '0%',
+                          opacity: pts != null ? 1 : 0.3,
+                        }}
+                      />
+                    </div>
+                    {note && <p className="text-primary-400 mt-0.5">{note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Arguments forts */}
+          {strongArgs.length > 0 && (
+            <div className="p-4 bg-red-50/60 rounded-xl border border-red-100">
+              <p className="text-sm font-bold text-red-800 mb-2.5 flex items-center gap-1.5">
+                🎯 Arguments forts
+              </p>
+              <div className="space-y-2">
+                {strongArgs.slice(0, 4).map((arg, i) => (
+                  <div key={arg.key} className="flex items-start gap-2">
+                    <span
+                      className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        i === 0 ? 'bg-red-500 text-white' : 'bg-red-200 text-red-700'
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p
+                        className={`text-xs font-semibold ${i === 0 ? 'text-red-700' : 'text-primary-700'}`}
+                      >
+                        {arg.label}
+                      </p>
+                      <p className="text-[11px] text-primary-500 leading-snug mt-0.5">{arg.hook}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Site web — qualité */}
           {lead.website_quality_score !== null && lead.website_quality_score !== undefined && (
             <div className="flex items-center gap-2 text-sm text-primary-600">
@@ -353,37 +572,70 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId }) {
           )}
 
           {/* Notes */}
-          {lead.notes && (
-            <div className="p-3 bg-primary-50 rounded-xl text-sm text-primary-700 italic">
-              {lead.notes}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-primary-500 uppercase tracking-wide flex items-center gap-1.5">
+              📝 Notes
+            </p>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Infos utiles, contexte, retour prospect..."
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border border-primary-200 bg-primary-50 text-sm text-primary-800 placeholder-primary-300 outline-none focus:border-accent-400 focus:bg-white transition-colors resize-none"
+            />
+            {notes !== (lead.notes || '') && (
+              <button
+                onClick={handleSaveNotes}
+                disabled={notesSaving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-500 text-white text-xs font-medium hover:bg-accent-600 disabled:opacity-50 transition-colors"
+              >
+                {notesSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                {notesSaved ? '✓ Enregistré' : 'Enregistrer'}
+              </button>
+            )}
+          </div>
 
           {/* Actions */}
-          <div className="pt-2 border-t border-gray-100 flex gap-2">
-            <button
-              onClick={() => {
-                onEnrich(lead.id, lead.name);
-                onClose();
-              }}
-              disabled={enrichingId === lead.id}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-medium hover:bg-violet-600 disabled:opacity-50 transition-colors"
-            >
-              {enrichingId === lead.id ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+          <div className="pt-2 border-t border-gray-100 space-y-2">
+            <div className="flex gap-2">
+              {!lead.enriched_at ? (
+                <button
+                  onClick={() => {
+                    onEnrich(lead.id, lead.name);
+                    onClose();
+                  }}
+                  disabled={enrichingId === lead.id}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-medium hover:bg-violet-600 disabled:opacity-50 transition-colors"
+                >
+                  {enrichingId === lead.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  Enrichir
+                </button>
               ) : (
-                <Sparkles className="w-4 h-4" />
+                <div className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-50 text-green-600 border border-green-200 text-sm font-medium">
+                  <Sparkles className="w-4 h-4" />
+                  Déjà enrichi
+                </div>
               )}
-              Enrichir ce lead
+              {lead.email && (
+                <a
+                  href={`mailto:${lead.email}`}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary-200 text-sm text-primary-700 hover:bg-primary-50 transition-colors"
+                >
+                  <Mail className="w-4 h-4" /> Contacter
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => onAddToCampaign(lead)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              Envoyer en campagne
             </button>
-            {lead.email && (
-              <a
-                href={`mailto:${lead.email}`}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary-200 text-sm text-primary-700 hover:bg-primary-50 transition-colors"
-              >
-                <Mail className="w-4 h-4" /> Contacter
-              </a>
-            )}
           </div>
         </div>
       </motion.div>
@@ -398,30 +650,105 @@ export default function Leads() {
   const [search, setSearch] = useState('');
   const [qualifFilter, setQualifFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [sortBy, setSortBy] = useState('score');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [enrichingId, setEnrichingId] = useState(null);
-  const [toast, setToast] = useState(null);
+  const { toast, showToast } = useToast();
   const [detailLead, setDetailLead] = useState(null);
+  const [campaignLead, setCampaignLead] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [typeCounts, setTypeCounts] = useState({});
+  const [campaignMap, setCampaignMap] = useState({});
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [starFilter, setStarFilter] = useState('');
   const perPage = 25;
+  const initDone = useRef(false);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+  const toggleSelect = (id, e) => {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredLeads.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredLeads.map((l) => l.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedIds.size) return;
+    setDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => leadsApi.delete(id)));
+      showToast(
+        `${selectedIds.size} lead${selectedIds.size > 1 ? 's' : ''} supprimé${selectedIds.size > 1 ? 's' : ''}`
+      );
+      setSelectedIds(new Set());
+      fetchLeads(
+        page,
+        search,
+        statusFilter,
+        typeFilter,
+        sortBy,
+        sortOrder,
+        selectedBatch,
+        starFilter
+      );
+    } catch {
+      showToast('Erreur lors de la suppression', 'red');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleExport = () => {
     const params = new URLSearchParams();
     if (statusFilter) params.append('status', statusFilter);
-    window.open(`${API_URL}/api/leads/export?${params.toString()}`, '_blank');
+    window.open(leadsApi.exportUrl(Object.fromEntries(params)), '_blank');
   };
 
   const handleEnrichOne = async (leadId, leadName) => {
     setEnrichingId(leadId);
     try {
-      await axios.post(`${API_URL}/api/enrichment/${leadId}`);
+      await enrichmentApi.single(leadId);
       showToast(`${leadName} enrichi avec succès`);
-      setTimeout(() => fetchLeads(page, search, statusFilter), 1500);
+      // Mise à jour locale immédiate — marque comme enrichi sans attendre le refetch
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId
+            ? {
+                ...l,
+                enriched_at: new Date().toISOString(),
+                status: l.status === 'new' ? 'enriched' : l.status,
+              }
+            : l
+        )
+      );
+      setTimeout(
+        () =>
+          fetchLeads(
+            page,
+            search,
+            statusFilter,
+            typeFilter,
+            sortBy,
+            sortOrder,
+            selectedBatch,
+            starFilter
+          ),
+        1500
+      );
     } catch {
       showToast("Erreur lors de l'enrichissement");
     } finally {
@@ -430,16 +757,43 @@ export default function Leads() {
   };
 
   const fetchLeads = useCallback(
-    async (p = 1, city = '', status = '') => {
+    async (
+      p = 1,
+      city = '',
+      status = '',
+      type = '',
+      sort = 'score',
+      order = 'desc',
+      batchId = null,
+      stars = ''
+    ) => {
       setLoading(true);
       setError(null);
       try {
-        const params = { page: p, per_page: perPage };
+        const params = { page: p, per_page: perPage, sort_by: sort, sort_order: order };
         if (city) params.city = city;
         if (status) params.status = status;
-        const res = await axios.get(`${API_URL}/api/leads/`, { params });
-        setLeads(res.data.leads || []);
+        if (type === 'nouvelle_entreprise') {
+          params.is_nouvelle_entreprise = true;
+        } else {
+          params.is_nouvelle_entreprise = false;
+          if (type) params.lead_type = type;
+        }
+        if (batchId) params.batch_id = batchId;
+        if (stars) params.star_rating = stars;
+        const res = await leadsApi.list(params);
+        const loadedLeads = res.data.leads || [];
+        setLeads(loadedLeads);
         setTotal(res.data.total || 0);
+
+        // Charger le statut campagne des leads affichés
+        if (loadedLeads.length > 0) {
+          const ids = loadedLeads.map((l) => l.id).join(',');
+          leadsApi
+            .campaignStatus(ids)
+            .then((r) => setCampaignMap((prev) => ({ ...prev, ...r.data })))
+            .catch(() => {});
+        }
       } catch {
         setError(
           'Impossible de charger les leads. Vérifiez que le backend tourne sur le port 8000.'
@@ -451,16 +805,51 @@ export default function Leads() {
     [perPage]
   );
 
-  // search est intentionnellement exclu : on ne relance pas au keystroke, seulement sur submit
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    fetchLeads(page, search, statusFilter);
-  }, [page, statusFilter, fetchLeads]);
+    // Lecture du batch_id dans l'URL (ex: /leads?batch_id=3)
+    const params = new URLSearchParams(window.location.search);
+    const urlBatchId = params.get('batch_id');
+    if (urlBatchId && !initDone.current) {
+      setSelectedBatch(parseInt(urlBatchId));
+    }
+    initDone.current = true;
+
+    leadsApi
+      .batches()
+      .then((r) => setBatches(r.data || []))
+      .catch(() => {});
+    // Fetch des compteurs par type pour les tabs
+    leadsApi
+      .stats()
+      .then((r) => {
+        const counts = { ...(r.data?.by_type || {}) };
+        if (r.data?.nouvelles_entreprises?.total) {
+          counts.nouvelle_entreprise = r.data.nouvelles_entreprises.total;
+        }
+        setTypeCounts(counts);
+      })
+      .catch(() => {});
+  }, []);
+
+  // search est intentionnellement exclu : on ne relance pas au keystroke, seulement sur submit
+  useEffect(() => {
+    fetchLeads(
+      page,
+      search,
+      statusFilter,
+      typeFilter,
+      sortBy,
+      sortOrder,
+      selectedBatch,
+      starFilter
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, statusFilter, typeFilter, sortBy, sortOrder, selectedBatch, starFilter, fetchLeads]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    fetchLeads(1, search, statusFilter);
+    fetchLeads(1, search, statusFilter, typeFilter, sortBy, sortOrder, selectedBatch, starFilter);
   };
 
   const handleStatusFilter = (value) => {
@@ -469,17 +858,36 @@ export default function Leads() {
   };
 
   // Filtre qualification côté client (leads déjà chargés)
-  const filteredLeads = leads.filter((lead) => {
-    if (!qualifFilter) return true;
-    const q = getQualification(lead);
-    if (qualifFilter === 'sans_site') return q.label === 'SANS SITE';
-    if (qualifFilter === 'a_analyser') return q.label === 'À ANALYSER';
-    if (qualifFilter === 'non_analyse') return q.label === 'NON ANALYSÉ';
-    if (qualifFilter === 'chaud') return q.label === 'CHAUD';
-    if (qualifFilter === 'tiede') return q.label === 'TIÈDE';
-    if (qualifFilter === 'froid') return q.label === 'FROID';
-    return true;
-  });
+  const filteredLeads = (() => {
+    let result = leads.filter((lead) => {
+      if (!qualifFilter) return true;
+      const q = getQualification(lead);
+      if (qualifFilter === 'sans_site') return q.label === 'SANS SITE';
+      if (qualifFilter === 'a_analyser') return q.label === 'À ANALYSER';
+      if (qualifFilter === 'non_analyse') return q.label === 'NON ANALYSÉ';
+      if (qualifFilter === 'chaud') return q.label === 'CHAUD';
+      if (qualifFilter === 'tiede') return q.label === 'TIÈDE';
+      if (qualifFilter === 'froid') return q.label === 'FROID';
+      return true;
+    });
+    // Dans la vue "Tous" : trier par priorité de qualification
+    if (!typeFilter) {
+      const QUALIF_ORDER = {
+        'SANS SITE': 0,
+        CHAUD: 1,
+        TIÈDE: 2,
+        'À ANALYSER': 3,
+        'NON ANALYSÉ': 4,
+        FROID: 5,
+      };
+      result = [...result].sort((a, b) => {
+        const qa = getQualification(a).label;
+        const qb = getQualification(b).label;
+        return (QUALIF_ORDER[qa] ?? 99) - (QUALIF_ORDER[qb] ?? 99);
+      });
+    }
+    return result;
+  })();
 
   const totalPages = Math.ceil(total / perPage);
 
@@ -500,6 +908,36 @@ export default function Leads() {
             onClose={() => setDetailLead(null)}
             onEnrich={handleEnrichOne}
             enrichingId={enrichingId}
+            onAddToCampaign={(lead) => {
+              setDetailLead(null);
+              setCampaignLead(lead);
+            }}
+            onNotesSaved={(leadId, newNotes) => {
+              setLeads((prev) =>
+                prev.map((l) => (l.id === leadId ? { ...l, notes: newNotes } : l))
+              );
+              setDetailLead((prev) => (prev ? { ...prev, notes: newNotes } : prev));
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modal sélection campagne */}
+      <AnimatePresence>
+        {campaignLead && (
+          <SelectCampaignModal
+            lead={campaignLead}
+            onClose={() => setCampaignLead(null)}
+            onSuccess={(msg) => {
+              showToast(msg);
+              // Rafraîchir le statut campagne immédiatement
+              const ids = leads.map((l) => l.id).join(',');
+              if (ids)
+                leadsApi
+                  .campaignStatus(ids)
+                  .then((r) => setCampaignMap(r.data))
+                  .catch(() => {});
+            }}
           />
         )}
       </AnimatePresence>
@@ -511,9 +949,11 @@ export default function Leads() {
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
-            className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-green-600 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg"
+            className={`fixed top-6 right-6 z-50 flex items-center gap-2 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg ${
+              toast.color === 'red' ? 'bg-red-600' : 'bg-green-600'
+            }`}
           >
-            {toast}
+            {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
@@ -528,7 +968,18 @@ export default function Leads() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => fetchLeads(page, search, statusFilter)}
+            onClick={() =>
+              fetchLeads(
+                page,
+                search,
+                statusFilter,
+                typeFilter,
+                sortBy,
+                sortOrder,
+                selectedBatch,
+                starFilter
+              )
+            }
             className="p-2 rounded-xl border border-primary-200 hover:bg-primary-50 transition-colors"
             title="Rafraîchir"
           >
@@ -550,6 +1001,197 @@ export default function Leads() {
         </div>
       </motion.div>
 
+      {/* Tabs par type d'établissement */}
+      <motion.div {...fadeUp} className="flex gap-1.5 flex-wrap">
+        {TYPE_TABS.map((tab) => {
+          const count =
+            tab.value === ''
+              ? Object.values(typeCounts).reduce((a, b) => a + b, 0)
+              : typeCounts[tab.value] || 0;
+          const active = typeFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => {
+                setTypeFilter(tab.value);
+                setPage(1);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all duration-150 ${
+                active
+                  ? tab.activeClass
+                  : 'bg-white text-primary-600 border-primary-200 hover:bg-primary-50'
+              }`}
+            >
+              <span>{tab.emoji}</span>
+              <span>{tab.label}</span>
+              {count > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    active ? 'bg-white/20 text-white' : 'bg-primary-100 text-primary-500'
+                  }`}
+                >
+                  {count.toLocaleString('fr-FR')}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </motion.div>
+
+      {/* Filtres rapides par statut */}
+      <motion.div {...fadeUp} className="flex gap-2 flex-wrap items-center">
+        <span className="text-xs text-primary-400 font-medium">Statut :</span>
+        {[
+          {
+            value: '',
+            label: 'Tous',
+            emoji: '',
+            cls: 'bg-primary-800 text-white border-primary-800',
+            inactiveExtra: '',
+          },
+          {
+            value: 'enriched',
+            label: 'Enrichis',
+            emoji: '✅',
+            cls: 'bg-green-600 text-white border-green-600',
+            inactiveExtra: '',
+          },
+          {
+            value: 'new',
+            label: 'Nouveaux',
+            emoji: '🆕',
+            cls: 'bg-slate-600 text-white border-slate-600',
+            inactiveExtra: '',
+          },
+          {
+            value: 'no_email',
+            label: 'Contact tél/LinkedIn',
+            emoji: '📞',
+            cls: 'bg-orange-500 text-white border-orange-500',
+            inactiveExtra: '',
+          },
+          {
+            value: 'contacted',
+            label: 'Contactés',
+            emoji: '📧',
+            cls: 'bg-amber-500 text-white border-amber-500',
+            inactiveExtra: '',
+          },
+          {
+            value: 'responded',
+            label: 'Ont répondu',
+            emoji: '💬',
+            cls: 'bg-blue-600 text-white border-blue-600',
+            inactiveExtra: '',
+          },
+        ].map(({ value, label, emoji, cls }) => {
+          const active = statusFilter === value;
+          return (
+            <button
+              key={value}
+              onClick={() => {
+                handleStatusFilter(value);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-150 ${
+                active ? cls : 'bg-white text-primary-600 border-primary-200 hover:bg-primary-50'
+              }`}
+            >
+              {emoji && <span>{emoji}</span>}
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </motion.div>
+
+      {/* Lots d'import */}
+      {batches.length > 0 && (
+        <motion.div {...fadeUp}>
+          <p className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <span>📦</span> Lots d'import
+          </p>
+          <div className="flex gap-2 flex-wrap items-center">
+            <button
+              onClick={() => {
+                setSelectedBatch(null);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                selectedBatch === null
+                  ? 'bg-accent-500 text-white border-accent-500'
+                  : 'bg-white text-primary-600 border-primary-200 hover:bg-primary-50'
+              }`}
+            >
+              Tous les lots
+            </button>
+            {batches.map((b) => {
+              const date = new Date(b.created_at).toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: 'short',
+                year: '2-digit',
+              });
+              const typeEmojis = {
+                hotel: '🏨',
+                camping: '⛺',
+                gite: '🏡',
+                chambre_hotes: '🛏️',
+                residence: '🏢',
+                activite: '🎯',
+                other: '🏠',
+              };
+              const typeStr = (b.types || [])
+                .slice(0, 3)
+                .map((t) => typeEmojis[t] || '🏠')
+                .join('');
+
+              // Libellé géographique : départements si disponibles, sinon nom du lot
+              const depts = b.departments || [];
+              const deptLabel =
+                depts.length > 0
+                  ? depts.map((d) => `${d} — ${DEPT_NAMES[d] || d}`).join(', ')
+                  : b.name?.split('—')[0]?.trim() || `Lot #${b.id}`;
+
+              // Sous-titre court pour l'affichage condensé dans le badge
+              const deptShort =
+                depts.length > 0 ? depts.map((d) => `Dept. ${d}`).join(' · ') : null;
+
+              const active = selectedBatch === b.id;
+              const enrichPct =
+                b.total_leads > 0 ? Math.round((b.enriched / b.total_leads) * 100) : 0;
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => {
+                    setSelectedBatch(b.id);
+                    setPage(1);
+                  }}
+                  title={`${deptLabel}\n${b.total_leads} leads · ${b.enriched} enrichis · ${b.contacted} contactés`}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
+                    active
+                      ? 'border-accent-500 bg-accent-50 shadow-sm ring-1 ring-accent-200'
+                      : 'border-primary-200 bg-white hover:bg-primary-50'
+                  }`}
+                >
+                  <span className="text-base leading-none">{typeStr || '📦'}</span>
+                  <div className="min-w-0">
+                    <p
+                      className={`text-xs font-bold leading-tight truncate max-w-[160px] ${active ? 'text-accent-700' : 'text-primary-800'}`}
+                    >
+                      {deptShort || deptLabel}
+                    </p>
+                    <p className="text-[10px] text-primary-400 truncate max-w-[160px]">
+                      {b.total_leads} leads · {date}
+                      {enrichPct > 0 ? (
+                        <span className="text-green-500 ml-1">· {enrichPct}%</span>
+                      ) : null}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
       {/* Compteurs qualification */}
       {leads.length > 0 && (
         <motion.div {...fadeUp} className="flex gap-3 flex-wrap">
@@ -558,6 +1200,16 @@ export default function Leads() {
               key: 'SANS SITE',
               label: '🔥 Sans site',
               bg: 'bg-red-100 border-red-200 text-red-700',
+            },
+            {
+              key: 'PRIORITAIRE',
+              label: '🔥 Prioritaire RCS',
+              bg: 'bg-emerald-100 border-emerald-200 text-emerald-700',
+            },
+            {
+              key: 'INTÉRESSANT',
+              label: '👀 Intéressant RCS',
+              bg: 'bg-teal-50 border-teal-100 text-teal-700',
             },
             { key: 'CHAUD', label: '🔥 Chaud', bg: 'bg-red-50 border-red-100 text-red-600' },
             { key: 'TIÈDE', label: '😐 Tiède', bg: 'bg-amber-50 border-amber-100 text-amber-700' },
@@ -581,13 +1233,14 @@ export default function Leads() {
       )}
 
       {/* Filtres */}
-      <motion.div {...fadeUp} className="card p-4 flex flex-wrap gap-3">
-        <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-0">
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-200 min-w-0">
+      {/* Ligne 1 : Recherche */}
+      <motion.div {...fadeUp} className="card p-4">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-200">
             <Search className="w-4 h-4 text-primary-400 flex-shrink-0" />
             <input
-              className="flex-1 bg-transparent text-sm text-primary-900 placeholder-primary-400 outline-none min-w-0"
-              placeholder="Filtrer par ville…"
+              className="flex-1 bg-transparent text-sm text-primary-900 placeholder-primary-400 outline-none"
+              placeholder="Rechercher par ville…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -603,7 +1256,16 @@ export default function Leads() {
               type="button"
               onClick={() => {
                 setSearch('');
-                fetchLeads(1, '');
+                fetchLeads(
+                  1,
+                  '',
+                  statusFilter,
+                  typeFilter,
+                  sortBy,
+                  sortOrder,
+                  selectedBatch,
+                  starFilter
+                );
               }}
               className="px-3 py-2 rounded-lg border border-primary-200 text-primary-600 hover:bg-primary-50 text-sm transition-colors"
             >
@@ -611,23 +1273,92 @@ export default function Leads() {
             </button>
           )}
         </form>
+      </motion.div>
 
-        {/* Filtre statut */}
-        <div className="flex items-center gap-1.5">
-          <select
-            value={statusFilter}
-            onChange={(e) => handleStatusFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary-200 bg-primary-50 text-primary-700 outline-none cursor-pointer hover:bg-primary-100 transition-colors"
+      {/* Ligne 2 : Filtres & Tri */}
+      <motion.div {...fadeUp} className="card p-4 flex items-center gap-3 flex-wrap">
+        {/* Type — géré par les tabs ci-dessus, affiché comme badge actif ici */}
+        {typeFilter && (
+          <button
+            onClick={() => {
+              setTypeFilter('');
+              setPage(1);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-primary-300 bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors"
           >
-            {STATUS_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
+            {TYPE_EMOJI[typeFilter] || '🏠'} {TYPE_LABELS[typeFilter] || typeFilter}
+            <X className="w-3 h-3 ml-0.5" />
+          </button>
+        )}
+
+        {/* Tri */}
+        <select
+          value={`${sortBy}_${sortOrder}`}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === 'enriched_first') {
+              handleStatusFilter('enriched');
+              setSortBy('score');
+              setSortOrder('desc');
+              setPage(1);
+            } else {
+              const [s, o] = val.split('_');
+              setSortBy(s);
+              setSortOrder(o);
+              setPage(1);
+            }
+          }}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary-200 bg-primary-50 text-primary-700 outline-none cursor-pointer hover:bg-primary-100 transition-colors"
+        >
+          <option value="score_desc">Score ↓</option>
+          <option value="score_asc">Score ↑</option>
+          <option value="created_at_desc">Plus récents</option>
+          <option value="created_at_asc">Plus anciens</option>
+          <option value="name_asc">Nom A→Z</option>
+          <option value="name_desc">Nom Z→A</option>
+          <option value="enriched_first">✅ Enrichis d'abord</option>
+        </select>
+
+        {/* Filtre étoiles */}
+        <div className="flex items-center gap-1.5">
+          <Star className="w-4 h-4 text-amber-400" />
+          <div className="flex gap-1">
+            <button
+              onClick={() => {
+                setStarFilter('');
+                setPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                starFilter === ''
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
+              }`}
+            >
+              Toutes
+            </button>
+            {['1', '2', '3', '4', '5'].map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setStarFilter(starFilter === s ? '' : s);
+                  setPage(1);
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-0.5 ${
+                  starFilter === s
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
+                }`}
+              >
+                {s} {'★'}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
-        {/* Filtre qualification */}
+        {/* Séparateur visuel */}
+        <div className="w-px h-5 bg-primary-200" />
+
+        {/* Qualification */}
         <div className="flex items-center gap-1.5">
           <Filter className="w-4 h-4 text-primary-400" />
           <div className="flex gap-1 flex-wrap">
@@ -656,8 +1387,43 @@ export default function Leads() {
         </motion.div>
       )}
 
+      {/* Barre d'actions sélection */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 bg-primary-900 text-white rounded-2xl shadow-2xl"
+          >
+            <span className="text-sm font-semibold">
+              {selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <div className="w-px h-4 bg-white/20" />
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-white/60 hover:text-white transition-colors"
+            >
+              Désélectionner
+            </button>
+            <button
+              onClick={handleDeleteSelected}
+              disabled={deleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+            >
+              {deleting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <X className="w-3.5 h-3.5" />
+              )}
+              Supprimer
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Tableau */}
-      <motion.div {...fadeUp} className="card overflow-hidden">
+      <motion.div {...fadeUp} className="card overflow-hidden overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="w-8 h-8 text-accent-500 animate-spin" />
@@ -676,22 +1442,38 @@ export default function Leads() {
           <table className="w-full">
             <thead className="bg-primary-50 border-b border-primary-100">
               <tr>
+                <th className="px-4 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
+                  />
+                </th>
                 <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
                   Établissement
                 </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
+                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden md:table-cell">
                   Type
                 </th>
                 <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
                   Qualification
                 </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
-                  Score
+                <th
+                  className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 cursor-pointer hover:text-accent-600 select-none"
+                  onClick={() => {
+                    setSortBy('score');
+                    setSortOrder(sortBy === 'score' && sortOrder === 'desc' ? 'asc' : 'desc');
+                    setPage(1);
+                  }}
+                  title="Cliquer pour trier"
+                >
+                  Potentiel {sortBy === 'score' ? (sortOrder === 'desc' ? '↓' : '↑') : '↕'}
                 </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
+                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden lg:table-cell">
                   Contact
                 </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
+                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden lg:table-cell">
                   Site web
                 </th>
                 <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
@@ -702,111 +1484,238 @@ export default function Leads() {
             <tbody className="divide-y divide-primary-50">
               {filteredLeads.map((lead) => {
                 const q = getQualification(lead);
+                const camp = campaignMap[String(lead.id)];
                 return (
-                  <tr
-                    key={lead.id}
-                    onClick={() => setDetailLead(lead)}
-                    className="hover:bg-primary-50/40 transition-colors group cursor-pointer"
-                  >
-                    {/* Établissement */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 border ${q.bg} ${q.border}`}
-                        >
-                          <span>{TYPE_EMOJI[lead.lead_type] || '🏠'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-primary-900 text-sm truncate max-w-[200px]">
-                            {lead.name}
-                          </p>
-                          {lead.city && (
+                  <>
+                    <tr
+                      key={lead.id}
+                      onClick={() => setDetailLead(lead)}
+                      className={`transition-colors group cursor-pointer ${
+                        lead.is_nouvelle_entreprise
+                          ? selectedIds.has(lead.id)
+                            ? 'bg-emerald-100'
+                            : 'bg-emerald-50/60 hover:bg-emerald-50'
+                          : selectedIds.has(lead.id)
+                            ? 'bg-accent-50'
+                            : 'hover:bg-primary-50/40'
+                      }`}
+                      style={
+                        lead.is_nouvelle_entreprise ? { boxShadow: 'inset 3px 0 0 #10b981' } : {}
+                      }
+                    >
+                      {/* Checkbox */}
+                      <td className="px-4 py-3.5 w-8" onClick={(e) => toggleSelect(lead.id, e)}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(lead.id)}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Établissement */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex-shrink-0">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border ${
+                                lead.is_nouvelle_entreprise
+                                  ? 'bg-emerald-100 border-emerald-200'
+                                  : `${q.bg} ${q.border}`
+                              }`}
+                            >
+                              <span>
+                                {lead.is_nouvelle_entreprise
+                                  ? '🆕'
+                                  : TYPE_EMOJI[lead.lead_type] || '🏠'}
+                              </span>
+                            </div>
+                            {lead.enriched_at && (
+                              <span
+                                className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"
+                                title="Enrichi"
+                              />
+                            )}
+                            {lead.notes && (
+                              <span
+                                className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center"
+                                title={lead.notes}
+                              >
+                                <span className="text-[7px] leading-none">📝</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p
+                                className={`font-medium text-sm truncate max-w-[200px] ${lead.is_nouvelle_entreprise ? 'text-emerald-900' : 'text-primary-900'}`}
+                              >
+                                {lead.name}
+                              </p>
+                              {lead.is_nouvelle_entreprise && lead.forme_juridique && (
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md border border-emerald-200 whitespace-nowrap">
+                                  {lead.forme_juridique}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-primary-400 truncate">
                               {lead.city}
                               {lead.postal_code ? ` · ${lead.postal_code}` : ''}
+                              {lead.is_nouvelle_entreprise && lead.capital != null && (
+                                <span className="ml-1.5 text-emerald-600 font-medium">
+                                  · {lead.capital.toLocaleString('fr-FR')} € capital
+                                </span>
+                              )}
+                              {!lead.is_nouvelle_entreprise && lead.status === 'enriched' && (
+                                <span className="ml-1.5 text-green-600 font-medium">· enrichi</span>
+                              )}
                             </p>
+                            {lead.is_nouvelle_entreprise && lead.objet_social && (
+                              <p className="text-[11px] text-emerald-700/80 truncate max-w-[240px] mt-0.5 italic">
+                                {lead.objet_social.slice(0, 60)}
+                                {lead.objet_social.length > 60 ? '…' : ''}
+                              </p>
+                            )}
+                            {camp && (
+                              <p className="text-[10px] mt-0.5 truncate max-w-[200px]">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium ${
+                                    camp.message_status === 'SENT' ||
+                                    camp.message_status === 'DELIVERED'
+                                      ? 'bg-blue-50 text-blue-600'
+                                      : camp.message_status === 'QUEUED'
+                                        ? 'bg-amber-50 text-amber-600'
+                                        : 'bg-primary-50 text-primary-500'
+                                  }`}
+                                >
+                                  {camp.message_status === 'SENT' ||
+                                  camp.message_status === 'DELIVERED'
+                                    ? '📨'
+                                    : camp.message_status === 'QUEUED'
+                                      ? '⏳'
+                                      : '📋'}
+                                  {camp.campaign_name}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Type */}
+                      <td className="px-5 py-3.5 hidden md:table-cell">
+                        <div className="flex flex-col gap-1">
+                          {lead.is_nouvelle_entreprise ? (
+                            <span className="text-xs text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg font-semibold">
+                              🆕 Nlle Entreprise
+                            </span>
+                          ) : (
+                            <span className="text-xs text-primary-500 bg-primary-50 px-2 py-1 rounded-lg">
+                              {TYPE_LABELS[lead.lead_type] || lead.lead_type}
+                              {lead.star_rating &&
+                                ` · ${lead.star_rating.replace(' étoiles', '★')}`}
+                            </span>
+                          )}
+                          {lead.is_nouvelle_entreprise && (
+                            <span className="text-[10px] text-primary-400">
+                              {TYPE_LABELS[lead.lead_type] || lead.lead_type}
+                            </span>
                           )}
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Type */}
-                    <td className="px-5 py-3.5">
-                      <span className="text-xs text-primary-500 bg-primary-50 px-2 py-1 rounded-lg">
-                        {TYPE_LABELS[lead.lead_type] || lead.lead_type}
-                        {lead.star_rating && ` · ${lead.star_rating.replace(' étoiles', '★')}`}
-                      </span>
-                    </td>
+                      {/* Qualification */}
+                      <td className="px-5 py-3.5">
+                        <QualifBadge lead={lead} />
+                      </td>
 
-                    {/* Qualification */}
-                    <td className="px-5 py-3.5">
-                      <QualifBadge lead={lead} />
-                    </td>
+                      {/* Score / Potentiel */}
+                      <td className="px-5 py-3.5">
+                        <ScoreBadge score={lead.score} lead={lead} />
+                      </td>
 
-                    {/* Score */}
-                    <td className="px-5 py-3.5">
-                      <ScoreBadge score={lead.score} />
-                    </td>
+                      {/* Contact */}
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        <div className="flex flex-col gap-0.5">
+                          {lead.email ? (
+                            <span className="flex items-center gap-1 text-xs text-success-600">
+                              <Mail className="w-3 h-3" />
+                              <span className="truncate max-w-[120px]">{lead.email}</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-primary-300">— email</span>
+                          )}
+                          {lead.phone && (
+                            <span className="flex items-center gap-1 text-xs text-primary-500">
+                              <Phone className="w-3 h-3" />
+                              {lead.phone}
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Contact */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex flex-col gap-0.5">
-                        {lead.email ? (
-                          <span className="flex items-center gap-1 text-xs text-success-600">
-                            <Mail className="w-3 h-3" />
-                            <span className="truncate max-w-[120px]">{lead.email}</span>
-                          </span>
+                      {/* Site web */}
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        {lead.website && !['', '-'].includes(lead.website) ? (
+                          <a
+                            href={lead.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700"
+                          >
+                            <Globe className="w-3 h-3" />
+                            <span className="truncate max-w-[100px]">
+                              {lead.website.replace(/^https?:\/\//, '')}
+                            </span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                          </a>
                         ) : (
-                          <span className="text-xs text-primary-300">— email</span>
+                          <span className="text-xs text-red-400 font-medium">Pas de site</span>
                         )}
-                        {lead.phone && (
-                          <span className="flex items-center gap-1 text-xs text-primary-500">
-                            <Phone className="w-3 h-3" />
-                            {lead.phone}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Site web */}
-                    <td className="px-5 py-3.5">
-                      {lead.website && !['', '-'].includes(lead.website) ? (
-                        <a
-                          href={lead.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700"
-                        >
-                          <Globe className="w-3 h-3" />
-                          <span className="truncate max-w-[100px]">
-                            {lead.website.replace(/^https?:\/\//, '')}
-                          </span>
-                          <ExternalLink className="w-2.5 h-2.5 opacity-50" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-red-400 font-medium">Pas de site</span>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleEnrichOne(lead.id, lead.name)}
-                        disabled={enrichingId === lead.id}
-                        title="Enrichir ce lead"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                          bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100
-                          disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      {/* Actions */}
+                      <td
+                        className="px-5 py-3.5 whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {enrichingId === lead.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3 h-3" />
-                        )}
-                        Enrichir
-                      </button>
-                    </td>
-                  </tr>
+                        <div className="flex items-center gap-1.5">
+                          {!lead.enriched_at ? (
+                            <button
+                              onClick={() => handleEnrichOne(lead.id, lead.name)}
+                              disabled={enrichingId === lead.id}
+                              title="Enrichir ce lead"
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                              bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100
+                              disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {enrichingId === lead.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-3 h-3" />
+                              )}
+                              Enrichir
+                            </button>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-600 border border-green-200">
+                              <Sparkles className="w-3 h-3" />
+                              Enrichi
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setCampaignLead(lead)}
+                            title="Envoyer en campagne"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                            bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100
+                            transition-colors"
+                          >
+                            <Send className="w-3 h-3" />
+                            Campagne
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </>
                 );
               })}
             </tbody>
@@ -829,9 +1738,20 @@ export default function Leads() {
               >
                 <ChevronLeft className="w-4 h-4 text-primary-600" />
               </button>
-              <span className="text-sm font-medium text-primary-700 min-w-[80px] text-center">
-                {page} / {totalPages}
-              </span>
+              <div className="flex items-center gap-1.5 text-sm text-primary-700">
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={page}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (val >= 1 && val <= totalPages) setPage(val);
+                  }}
+                  className="w-14 text-center border border-primary-200 rounded-lg px-2 py-1 text-sm font-medium text-primary-800 outline-none focus:border-accent-400 focus:ring-1 focus:ring-accent-200"
+                />
+                <span className="text-primary-400">/ {totalPages}</span>
+              </div>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}

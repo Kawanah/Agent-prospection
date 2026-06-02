@@ -53,7 +53,7 @@ npm run dev
 
 Puis ouvrir **http://localhost:5173** dans le navigateur.
 
-Identifiants par défaut : `admin` / `kawanah2026`
+Identifiant admin : voir `ADMIN_USERNAME` et `ADMIN_PASSWORD_HASH` dans `.env`.
 
 ---
 

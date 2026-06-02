@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, User, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { authApi } from '../api/auth';
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('admin');
@@ -22,9 +21,7 @@ export default function Login({ onLogin }) {
       form.append('username', username);
       form.append('password', password);
 
-      const res = await axios.post(`${API_URL}/api/auth/login`, form, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
+      const res = await authApi.login(form);
 
       const { access_token } = res.data;
       localStorage.setItem('kawanah_token', access_token);
@@ -49,7 +46,7 @@ export default function Login({ onLogin }) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent-500 mb-4 shadow-lg">
             <Lock className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-primary-900">Kawanah Travel</h1>
+          <h1 className="text-2xl font-display font-bold text-primary-900">Kawanah Tourisme</h1>
           <p className="text-primary-500 mt-1 text-sm">Agent de Prospection — Accès sécurisé</p>
         </div>
 

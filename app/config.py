@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # CORS — origines autorisées en production (séparées par des virgules)
     allowed_origins: str = ""
 
+    # Garde-fous d'administration
+    enable_runtime_settings: bool = False
+    enable_admin_purge: bool = False
+
     # Prise de rendez-vous
     booking_link: str = "https://app.lemcal.com/@kawanah/travel"
 

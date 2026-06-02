@@ -31,6 +31,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.models.lead import Lead, LeadStatus
 from app.models.contact import Contact, ContactRole
+from app.services.http_safety import MAX_REDIRECTS, validate_public_http_url
 from app.services.scoring_service import WebsiteAnalyzer
 from app.services.web_verification_service import WebVerificationService
 
@@ -98,7 +99,21 @@ class WebScraper:
     async def fetch_page(self, url: str) -> Optional[str]:
         """Récupère le contenu HTML d'une page."""
         try:
-            response = await self.client.get(url)
+            current_url = validate_public_http_url(url)
+            for _ in range(MAX_REDIRECTS + 1):
+                response = await self.client.get(current_url, follow_redirects=False)
+                if response.is_redirect:
+                    location = response.headers.get("Location")
+                    if not location:
+                        return None
+                    current_url = validate_public_http_url(
+                        urllib.parse.urljoin(current_url, location)
+                    )
+                    continue
+                break
+            else:
+                return None
+
             response.raise_for_status()
             return response.text
         except Exception as e:

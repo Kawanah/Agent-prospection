@@ -13,8 +13,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { agentApi } from '../api/agent';
 const SESSION_ID = 'default';
 
 const EXAMPLE_PROMPTS = [
@@ -29,9 +28,20 @@ function MessageBubble({ msg }) {
   const isSystem = msg.role === 'system';
 
   if (isSystem) {
+    const isWarning = msg.content.includes('⚠️') || msg.content.includes('Mode démo');
     return (
-      <div className="flex items-center gap-2 text-xs text-primary-400 py-1 px-3">
-        <div className="w-1.5 h-1.5 rounded-full bg-accent-400 animate-pulse" />
+      <div
+        className={`flex items-center gap-2 text-xs py-1.5 px-3 rounded-lg ${
+          isWarning
+            ? 'bg-amber-50 border border-amber-200 text-amber-700 font-medium'
+            : 'text-primary-400'
+        }`}
+      >
+        {isWarning ? (
+          <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+        ) : (
+          <div className="w-1.5 h-1.5 rounded-full bg-accent-400 animate-pulse" />
+        )}
         {msg.content}
       </div>
     );
@@ -76,7 +86,7 @@ function MessageBubble({ msg }) {
 
 const WELCOME_MSG = {
   role: 'assistant',
-  content: `👋 **Bonjour ! Je suis votre agent de prospection Kawanah Travel.**\n\nJe peux vous aider à :\n🔍 Rechercher des leads selon vos critères\n📊 Analyser les statistiques\n✉️ Générer des messages personnalisés\n\nQue voulez-vous faire ?`,
+  content: `👋 **Bonjour ! Je suis votre agent de prospection Kawanah Tourisme.**\n\nJe peux vous aider à :\n🔍 Rechercher des leads selon vos critères\n📊 Analyser les statistiques\n✉️ Générer des messages personnalisés\n\nQue voulez-vous faire ?`,
   timestamp: new Date().toISOString(),
 };
 
@@ -94,6 +104,7 @@ export default function Agent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState(null);
   const [showExamples, setShowExamples] = useState(true);
   // État human-in-the-loop : quand l'agent attend une décision
   const [requiresHumanInput, setRequiresHumanInput] = useState(false);
@@ -121,6 +132,7 @@ export default function Agent() {
     setInput('');
     setShowExamples(false);
     setError(null);
+    setLastFailedMessage(null);
 
     // Ajouter le message utilisateur
     const userMsg = { role: 'user', content: messageText, timestamp: new Date().toISOString() };
@@ -133,12 +145,12 @@ export default function Agent() {
         // L'agent attend une décision humaine → utiliser /respond
         setRequiresHumanInput(false);
         setHumanQuestion(null);
-        res = await axios.post(`${API_URL}/api/agent/respond`, {
+        res = await agentApi.respond({
           session_id: SESSION_ID,
           response: messageText,
         });
       } else {
-        res = await axios.post(`${API_URL}/api/agent/chat`, {
+        res = await agentApi.chat({
           message: messageText,
           session_id: SESSION_ID,
           mode: 'supervised',
@@ -160,6 +172,7 @@ export default function Agent() {
     } catch (err) {
       const detail = err.response?.data?.detail || err.message;
       setError(`Erreur de connexion à l'agent : ${detail}`);
+      setLastFailedMessage(messageText);
       setMessages((prev) => [
         ...prev,
         {
@@ -186,7 +199,7 @@ export default function Agent() {
 
   const resetSession = async () => {
     try {
-      await axios.delete(`${API_URL}/api/agent/session/${SESSION_ID}`);
+      await agentApi.resetSession(SESSION_ID);
     } catch {
       /* session déjà absente */
     }
@@ -319,7 +332,20 @@ export default function Agent() {
           {error && (
             <div className="flex items-center gap-2 text-xs text-red-600 mb-2">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-              {error}
+              <span className="flex-1">{error}</span>
+              {lastFailedMessage && (
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setMessages((prev) => prev.filter((m) => !m.content.startsWith('❌')));
+                    sendMessage(lastFailedMessage);
+                  }}
+                  disabled={loading}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors font-medium"
+                >
+                  <RefreshCw className="w-3 h-3" /> Réessayer
+                </button>
+              )}
             </div>
           )}
           <div className="flex items-end gap-3">

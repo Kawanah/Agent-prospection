@@ -16,6 +16,19 @@ router = APIRouter()
 ENV_PATH = Path(".env")
 
 
+def ensure_runtime_settings_enabled():
+    """Bloque l'administration des secrets en production sans opt-in explicite."""
+    current_settings = get_settings()
+    if (
+        current_settings.app_env == "production"
+        and not current_settings.enable_runtime_settings
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Modification des paramètres désactivée en production",
+        )
+
+
 def mask_key(value: str) -> str:
     """Masque une clé API : affiche les 6 premiers et 4 derniers caractères."""
     if not value or len(value) < 12:
@@ -110,6 +123,7 @@ class SettingsSaveRequest(BaseModel):
 @router.get("/", response_model=SettingsResponse)
 async def get_settings_view():
     """Retourne la configuration actuelle (clés API masquées)."""
+    ensure_runtime_settings_enabled()
     env = read_env_file()
 
     anthropic = env.get("ANTHROPIC_API_KEY", "")
@@ -135,6 +149,7 @@ async def get_settings_view():
 @router.put("/")
 async def save_settings(data: SettingsSaveRequest):
     """Sauvegarde les paramètres dans le fichier .env."""
+    ensure_runtime_settings_enabled()
     env = read_env_file()
     updates = {}
 
@@ -184,6 +199,7 @@ async def send_test_email(data: TestEmailRequest):
     """
     Envoie un email de test pour vérifier la configuration SMTP.
     """
+    ensure_runtime_settings_enabled()
     get_settings.cache_clear()
     service = EmailService()
 

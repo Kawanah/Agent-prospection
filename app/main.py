@@ -5,7 +5,7 @@ Point d'entrée de l'API FastAPI - Agent de Prospection Kawanah Tourisme.
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -225,8 +225,25 @@ app.include_router(
 
 
 @app.post("/api/admin/purge", tags=["Admin"], dependencies=_auth)
-async def purge_all_data():
+async def purge_all_data(
+    confirm: bool = Query(False, description="Confirmer la purge complète"),
+    confirm_text: str = Query(
+        "", description="Saisir exactement 'PURGER TOUT' pour confirmer"
+    ),
+):
     """Vide toutes les tables sans supprimer la structure."""
+    if settings.app_env == "production" and not settings.enable_admin_purge:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Purge admin désactivée en production"},
+        )
+    if not confirm or confirm_text != "PURGER TOUT":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "Double confirmation requise : confirm=true et confirm_text=PURGER TOUT"
+            },
+        )
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(table.delete())

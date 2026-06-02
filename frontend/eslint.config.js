@@ -24,7 +24,10 @@ export default defineConfig([
     },
     rules: {
       // Ignore les variables en majuscule, underscore, et les exports framer-motion
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]|^motion$|^AnimatePresence$' }],
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]|^motion$|^AnimatePresence$',
+        argsIgnorePattern: '^[A-Z_]|^_',
+      }],
     },
   },
 ])
