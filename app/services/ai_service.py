@@ -51,113 +51,130 @@ class GeneratedMessage:
 
 class MessageTemplates:
     """
-    Stratégies de message par segment — méthode A.I.D.A.
+    Stratégies de message par segment.
 
-    Voix : Laetitia, experte web hospitalité. Ton expert détendu, pair-à-pair.
-    Structure : Attention → Intérêt → Désir → Action.
-    Jamais de liste, jamais de pitch produit, 6-8 lignes max.
+    Voix : Laetitia, experte web hospitalité. Ton concret, sûr, qui donne envie.
+    Structure : constat d'audit → enjeu business → ce que Kawanah apporte → rendez-vous.
+    Vendeur mais crédible : on s'appuie sur de vrais constats, jamais sur du baratin.
     """
+
+    OFFER_CONTEXT = """
+OFFRE KAWANAH TOURISME (à utiliser comme arguments concrets, pas comme catalogue) :
+- Création de sites internet pour le tourisme : hôtels, gîtes, chambres d'hôtes, campings, hébergements.
+- Différenciateur unique : un socle SEO et IA natif intégré dès la conception. Le site est compris,
+  indexé et recommandé par Google ET par les moteurs de réponse IA (ChatGPT, Perplexity, etc.).
+- Sites responsives, modernes et dynamiques, qui mettent le lieu en valeur (photos, ambiance, expérience).
+- Fonctionnalités qui convertissent : formulaire de contact, réservation en direct, carte d'accès,
+  avis clients mis en avant, navigation claire et rapide.
+- Réservation directe : plus de réservations en propre, moins de dépendance aux intermédiaires.
+
+UTILISATION DANS LES EMAILS :
+Choisir l'angle qui correspond au lead et à son audit. Nommer un ou deux manques concrets du site,
+montrer ce que ça coûte en clients ou en réservations, puis ce que Kawanah met en face. Vendeur, pas agressif.
+"""
 
     # ─── Règles de style globales injectées dans chaque prompt ────────────────
     STYLE_RULES = """
 RÈGLES DE STYLE ABSOLUES (à respecter impérativement) :
-- Tu écris comme Laetitia : experte web spécialisée hospitalité, ton détendu et direct, ni commercial ni corporate
-- Structure AIDA obligatoire :
-  A - ATTENTION : première ligne percutante, factuelle, qui parle de LUI (pas de toi)
-  I - INTÉRÊT : développe pourquoi c'est un enjeu concret pour son établissement
-  D - DÉSIR : fait entrevoir ce que ça changerait concrètement (sans pitcher de service)
-  A - ACTION : question ouverte courte qui invite à répondre, + lien de rendez-vous en option légère
-- TOUJOURS commencer le mail par "Bonjour," sur une ligne seule
-- TOUJOURS terminer par une formule de politesse courte avant la signature (ex: "Belle journée,", "Au plaisir d'échanger,", "À bientôt,", "Bonne continuation,")
+- Tu écris un BROUILLON de prospection que Laetitia relira avant envoi
+- Voix de Laetitia : experte web hospitalité, ton concret, sûr d'elle, qui donne envie de répondre. Vendeur mais crédible, jamais agressif ni racoleur
+- Structure obligatoire du corps :
+  1. Bonjour,
+  2. Tu as regardé leur site : nomme 2 ou 3 constats concrets de l'audit (ex : pas responsive, pas de réservation en direct, pas d'avis affichés, pas de carte)
+  3. L'enjeu business en une phrase : ce que ces manques coûtent (clients qui passent à côté, réservations qui partent chez des intermédiaires)
+  4. Ce que Kawanah apporte en face, avec le différenciateur : site responsive et moderne, réservation directe, avis et carte, et SURTOUT un socle SEO et IA natif (visible sur Google ET sur les moteurs IA)
+  5. Une proposition concrète et courte (ex : je vous montre en 15 min ce que ça donnerait pour [nom])
+  6. La phrase de rendez-vous exacte, puis formule de politesse et signature
+- TOUJOURS commencer par "Bonjour," sur une ligne seule
+- TOUJOURS citer l'URL du site dans la première observation si un site existe
+- TOUJOURS s'appuyer sur les constats réels de l'AUDIT CONCRET fourni. Ne rien inventer qui n'y figure pas
+- Tu PEUX promettre un bénéfice concret et utiliser un vocabulaire commercial mesuré (visibilité, réservations directes, plus de clients). C'est un message qui vend
 - JAMAIS de guillemets « » ou " " dans le message
-- JAMAIS de tiret long — (em dash). Utiliser le tiret court - à la place
-- JAMAIS de liste à puces ou tirets
+- INTERDICTION ABSOLUE du tiret long (em dash). Ne jamais l'utiliser. Virgule, point ou reformulation à la place
+- JAMAIS de liste à puces ni de tirets dans le corps : que des phrases
 - JAMAIS "Je me permets de vous contacter"
-- JAMAIS de présentation de l'agence dans le corps du message (juste la signature)
-- Maximum 7 lignes dans le corps du message (hors bonjour et signature)
-- Le lecteur doit sentir que tu as regardé SA situation spécifiquement, pas qu'il reçoit un email en masse
-- La partie DÉSIR ne cite jamais un service Kawanah — elle décrit un bénéfice concret (plus de réservations, meilleure visibilité, indépendance)
-- La partie ACTION finit par une vraie question qui invite à répondre (pas "seriez-vous disponible pour un appel ?")
-- Signature : Laetitia pour Kawanah Tourisme\ntravel.kawanah.com
+- JAMAIS de présentation de l'agence en bloc (les arguments s'intègrent dans les phrases, la signature suffit pour le reste)
+- JAMAIS nommer une plateforme tierce (Booking, Airbnb...) : dire "un intermédiaire" / "une plateforme tierce"
+- JAMAIS de chiffre en euros ou en pourcentage (pas de commission chiffrée)
+- Ton affirmé mais respectueux : pas d'insulte ni de mépris sur leur site actuel. On constate, on ne juge pas la personne
+- Le corps fait 6 à 9 lignes maximum hors signature. Dense et utile, pas un pavé
+- Avant la formule de politesse, TOUJOURS cette phrase exacte sur sa propre ligne : "On peut prendre un rendez-vous pour en parler : " suivie du lien de rendez-vous
+- Terminer par une formule de politesse courte (ex : "Belle journée,") puis la signature
+- Signature : Laetitia pour Kawanah Tourisme\nhttps://tourisme.kawanah.com/
 """
 
     SANS_SITE = """
 SITUATION : L'établissement n'a pas de site web.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : ouvrir avec le fait brut — "En cherchant [nom] en ligne, je ne trouve rien." Court, factuel, pas de drama.
-I - INTÉRÊT : expliquer l'enjeu concret — les voyageurs qui cherchent un [type] à [ville] passent directement chez la concurrence qui apparaît en premier.
-D - DÉSIR : faire entrevoir ce que ça change — un établissement visible en ligne capte ces réservations sans effort, même en dehors des plateformes. Mentionner naturellement que Google ET les moteurs IA (ChatGPT, Perplexity) indexent un site dès l'ouverture.
-A - ACTION : demander si c'est un choix délibéré ou si c'est en projet — question ouverte qui qualifie sans forcer.
-Ne pas pitcher. Laisser la curiosité faire le travail.
+ANGLE :
+Dire simplement que tu n'as pas trouvé de site propre associé à l'établissement.
+Rester prudent : peut-être que c'est volontaire, peut-être que c'est prévu plus tard.
+La question doit ouvrir la discussion, pas pousser une solution.
 """
 
     A_VERIFIER = """
 SITUATION : Le site semble inaccessible ou cassé.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : ouvrir avec le fait brut — "J'ai essayé d'accéder au site de [nom] ce matin — erreur." Court, factuel, comme une alerte entre pairs.
-I - INTÉRÊT : l'enjeu concret — un voyageur qui tombe sur une erreur part en 3 secondes chez le concurrent d'à côté. Chaque jour que ça dure, c'est des réservations perdues.
-D - DÉSIR : un site qui répond correctement, ça retient le visiteur et le convertit. Glisser que c'est souvent un problème technique simple à corriger.
-A - ACTION : demander si c'est un problème connu de leur côté, ou si l'info est nouvelle pour eux.
-Ton : entre pairs qui se rendent service, pas vendeur qui détecte une opportunité.
+ANGLE :
+Signaler l'erreur comme une information utile, sans dramatiser.
+Le message doit ressembler à une alerte courte entre professionnels.
+Demander si c'est déjà connu de leur côté.
 """
 
     CHAUD = """
 SITUATION : Le site existe mais la qualité est faible (SEO mauvais, design daté, pas mobile-friendly).
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : ouvrir avec le chiffre ou l'observation qui claque.
-  Si données DataForSEO disponibles → "J'ai regardé la présence Google de [nom] : 0 mot-clé positionné. Invisible pour les recherches [type] à [ville]."
-  Si pas de données → "J'ai visité le site de [nom] — pour être direct, il ne joue pas dans la même cour que vos concurrents."
-I - INTÉRÊT : l'enjeu — les voyageurs comparent 3-4 sites avant de choisir. Un site qui date ou invisible Google, c'est une décision de réservation perdue à chaque recherche.
-D - DÉSIR : ce que ça change — un site optimisé pour Google ET les moteurs IA (ChatGPT, Perplexity) capte ces recherches automatiquement, 24h/24, sans commission.
-A - ACTION : "est-ce que c'est quelque chose que vous avez déjà eu le temps de regarder ?" Question légère, ouverte.
-NE PAS lister les services Kawanah.
+ANGLE :
+Partir d'une observation concrète : présence Google faible, site daté, mobile difficile ou réservation indirecte.
+Ne jamais faire peur. Dire que c'est un point à regarder, pas un problème grave.
+Finir par demander si le sujet est déjà identifié chez eux.
 """
 
     TIEDE_GEO = """
 SITUATION : Le site est correct, le SEO Google est OK, mais la présence sur les moteurs IA est absente.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : ouvrir par un compliment factuel — reconnaître la bonne présence Google (avec chiffres si dispo). "J'ai regardé [nom] sur Google — solide présence. Une chose m'a quand même interpellé..."
-I - INTÉRÊT : le contraste SEO ✓ / IA ✗ — être bien référencé Google ne suffit plus. Les voyageurs demandent maintenant directement à ChatGPT ou Perplexity, qui donnent des recommandations basées sur d'autres critères.
-D - DÉSIR : ce que ça change — un établissement optimisé pour les moteurs IA (données structurées, contenu riche) apparaît dans ces réponses générées. C'est un canal entier à aller chercher.
-A - ACTION : "est-ce que vous avez regardé ce que ChatGPT répond quand on lui demande un [type] à [ville] ?" Proposer de partager le résultat de la requête.
-Rester curieux, pas alarmiste. C'est une opportunité, pas un problème.
+ANGLE :
+Commencer par reconnaître ce qui est déjà bien.
+Introduire les moteurs IA comme une curiosité à vérifier, pas comme une urgence.
+Proposer de partager une observation si le sujet les intéresse.
 """
 
     FROID_GEO = """
 SITUATION : Le site est bon, le SEO est solide.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : compliment factuel et sincère. Citer les chiffres DataForSEO si disponibles — "J'ai regardé [nom] : bon référencement Google, belle présence. Pas si courant dans le secteur."
-I - INTÉRÊT : introduire la prochaine frontière naturellement — "une chose que j'ai vérifiée en parallèle : ce que ChatGPT répond quand on cherche un [type] à [ville]."
-D - DÉSIR : ce que ça représente — les moteurs IA génèrent une nouvelle vague de voyageurs qui ne passent plus par Google. Un établissement déjà bien positionné peut capitaliser dessus avec quelques ajustements ciblés.
-A - ACTION : proposer de partager le résultat de la requête IA qu'on a faite pour eux — ça matérialise la valeur sans pitcher. "Voulez-vous que je vous l'envoie ?"
-Ton : expert curieux qui partage une découverte, pas commercial qui vend un service.
+ANGLE :
+Compliment factuel, puis une seule question sur les recherches IA.
+Le message doit rester optionnel et léger.
+Ne pas transformer une bonne situation en problème.
 """
 
     SITE_OBSOLETE = """
 SITUATION : L'établissement a un site web, mais il est clairement obsolète / daté / amateur.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : l'observation directe, factuelle et bienveillante — "J'ai visité le site de [nom] — pour être honnête, il ne reflète pas ce que vous proposez." Précis sur ce qui cloche : design d'une autre époque, pas aux standards actuels.
-I - INTÉRÊT : l'enjeu concret — un voyageur compare 3-4 sites avant de réserver. Un site daté, c'est une réservation perdue au profit du concurrent qui a une belle image en ligne. Glisser des données techniques si disponibles (SEO, mobile) en renfort.
-D - DÉSIR : ce que ça change — un site à l'image de l'établissement retient le visiteur, inspire confiance, et convertit. Mentionner que les sites modernes sont aussi indexés par les moteurs IA (ChatGPT, Perplexity) dès la mise en ligne.
-A - ACTION : "est-ce que la refonte du site c'est quelque chose que vous avez en projet ?" Question ouverte, légère.
-TON : direct mais bienveillant. On constate un décalage, on ne juge pas leur travail.
+ANGLE :
+Dire que le site semble ne plus refléter complètement l'établissement.
+Ne pas juger le design. Parler de décalage possible entre l'expérience réelle et l'image en ligne.
+Demander si une mise à jour du site est déjà prévue.
+"""
+
+    SITE_WIX = """
+SITUATION : L'établissement a un site hébergé sur Wix avec une URL non personnalisée, par exemple wixsite.com.
+
+ANGLE :
+Ne pas critiquer Wix frontalement et ne pas parler d'adresse comme un défaut humiliant.
+L'angle principal : le lieu semble déjà apprécié, mais le site mérite une mise à niveau technique pour passer à l'échelle.
+Parler de meilleure navigation client, de mise en valeur du lieu, et de réservation directe.
+Faire le lien avec les avis clients : le site devrait refléter la qualité perçue par leurs visiteurs.
+Finir par demander si une évolution du site fait partie de leurs sujets du moment.
 """
 
     PLATEFORME_GITE = """
 SITUATION : Établissement référencé sur une plateforme de gîtes (Gîtes de France, gites.fr, Clévacances...).
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : reconnaître la plateforme comme une vraie légitimité — "j'ai trouvé [nom] sur [plateforme] — beau label." Puis introduire l'observation : toutes les réservations passent par là, aucun trafic propre.
-I - INTÉRÊT : l'enjeu concret — quand un voyageur demande à ChatGPT "gîte à [ville] pour 6 personnes", la plateforme n'apparaît pas dans ces réponses. Leur nom non plus. Toute la nouvelle génération de recherche passe à côté.
-D - DÉSIR : ce que ça change — une présence propre, même simple, permet de capter des réservations directes ET d'être visible sur les moteurs IA. Complémentaire à la plateforme, pas concurrent.
-A - ACTION : "est-ce que vous avez pensé à avoir une présence propre pour capter ces réservations hors plateforme ?"
-TON : expert qui partage une observation factuelle. Pas de critique de la plateforme.
+ANGLE :
+Reconnaître la plateforme comme un vrai point positif.
+Ouvrir doucement le sujet de la présence en propre, en complément.
+Ne jamais critiquer la plateforme.
 """
 
     PAS_DE_RESA_DIRECTE = """
@@ -168,26 +185,19 @@ RÈGLES IMPÉRATIVES :
 - NE JAMAIS chiffrer en euros ou en pourcentage. Pas de "15-25%".
 - NE JAMAIS être péjoratif. C'est une observation factuelle, pas un problème.
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : observation concrète — "J'ai visité le site de [nom], j'ai voulu réserver et j'ai été redirigé vers une plateforme tierce." Factuel, neutre.
-I - INTÉRÊT : l'enjeu — les voyageurs qui arrivent sur un site préfèrent réserver directement dessus quand c'est possible. Chaque redirection vers une plateforme, c'est une réservation qui échappe au site.
-D - DÉSIR : ce que ça change — réserver directement sur le site capte ces clients, permet de récupérer leurs données, et offre une visibilité propre sur Google ET les moteurs IA (ChatGPT, Perplexity). Deux canaux en plus, sans intermédiaire.
-A - ACTION : "est-ce que la réservation directe c'est quelque chose que vous avez déjà envisagé ?"
-TON : curieux, factuel, positif. On parle d'opportunité, pas de problème.
+ANGLE :
+Constater la redirection vers un intermédiaire sans le nommer.
+Présenter la réservation directe comme un sujet possible, pas comme une obligation.
+Questionner simplement leur réflexion actuelle.
 """
 
     NOUVELLE_STRUCTURE = """
 SITUATION : Établissement qui vient d'ouvrir (date de création INSEE récente, moins de 18 mois).
 
-STRUCTURE AIDA à suivre :
-A - ATTENTION : félicitations chaleureux et sincères — mentionner l'ouverture, la ville, le type. Montrer qu'on a regardé.
-  "Félicitations pour l'ouverture de [nom] à [ville] — belle initiative dans un secteur qui en a besoin."
-  Si date connue : "Je vois que vous avez ouvert en [mois] — félicitations, belle aventure qui commence."
-I - INTÉRÊT : le contexte qui rend ça urgent — les établissements qui posent leur présence en ligne dès l'ouverture captent les premiers clients bien plus vite. Google et les moteurs IA indexent un nouveau site en quelques semaines — c'est une fenêtre courte.
-D - DÉSIR : ce que ça change concrètement — être trouvé dès l'ouverture sur Google ET sur ChatGPT, Perplexity. Les voyageurs qui cherchent un [type] à [ville] tombent sur l'établissement avant même qu'il soit connu. Une seule phrase sur ce qu'on fait si nécessaire, pas de liste.
-A - ACTION : demander où ils en sont sur leur présence en ligne — site en cours, projet, ou pas encore réfléchi ? Question légère, ouverte.
-TON : énergique et bienveillant. On célèbre leur lancement, on n'arrive pas avec un problème.
-JAMAIS de liste à puces. Maximum 8 lignes corps.
+ANGLE :
+Commencer par une vraie félicitation, courte et sobre.
+Parler des premiers mois comme d'un moment où la présence en ligne se construit naturellement.
+Demander où ils en sont, sans urgence artificielle.
 """
 
     @classmethod
@@ -197,7 +207,7 @@ JAMAIS de liste à puces. Maximum 8 lignes corps.
 
         Logique :
         1. Détecter les arguments forts (triés par impact)
-        2. L'argument #1 dicte le template — c'est l'angle d'attaque du message
+        2. L'argument #1 dicte le template, c'est l'angle d'attaque du message
         3. Fallback sur le segment classique si aucun argument fort
         """
         from app.services.ai_service import AIService
@@ -238,6 +248,10 @@ JAMAIS de liste à puces. Maximum 8 lignes corps.
         top_key = strong_args[0]["key"] if strong_args else None
 
         # Site obsolète = argument massue → template dédié (priorité maximale)
+        if top_key == "site_wix_sans_domaine":
+            return cls.SITE_WIX
+
+        # Site obsolète = argument fort → template dédié
         if top_key in ("site_obsolete_critique", "site_obsolete", "site_vieillissant"):
             return cls.SITE_OBSOLETE
 
@@ -316,6 +330,19 @@ class AIService:
         }.get(lead.lead_type.value if lead.lead_type else "other", "établissement")
         city = lead.city or "votre ville"
         name = lead.name
+        website_lower = (lead.website or "").lower()
+
+        # ── 0. URL Wix non personnalisée : signal visible immédiatement ──
+        if "wixsite.com" in website_lower:
+            args.append(
+                {
+                    "key": "site_wix_sans_domaine",
+                    "weight": 98,
+                    "label": "Adresse Wix non personnalisée",
+                    "hook": f"Le site de {name} utilise une adresse wixsite.com - avant même le contenu, "
+                    "cela donne une impression moins professionnelle qu'un nom de domaine propre.",
+                }
+            )
 
         # ── 1. SITE OBSOLÈTE (quality < 40, site existant) ──
         if lead.has_website is True and lead.website_quality_score is not None:
@@ -325,7 +352,7 @@ class AIService:
                         "key": "site_obsolete_critique",
                         "weight": 95,
                         "label": "Site complètement obsolète",
-                        "hook": f"Le site de {name} a besoin d'une refonte complète — design daté, "
+                        "hook": f"Le site de {name} a besoin d'une refonte complète, design daté, "
                         f"pas aux standards actuels. Un voyageur qui arrive dessus repart immédiatement.",
                     }
                 )
@@ -335,7 +362,7 @@ class AIService:
                         "key": "site_obsolete",
                         "weight": 90,
                         "label": "Site obsolète",
-                        "hook": f"Le site de {name} accuse son âge — il ne reflète pas la qualité "
+                        "hook": f"Le site de {name} accuse son âge, il ne reflète pas la qualité "
                         f"de l'établissement. Première impression en ligne = décision de réserver ou non.",
                     }
                 )
@@ -356,7 +383,7 @@ class AIService:
                     "key": "sans_site",
                     "weight": 88,
                     "label": "Aucun site web",
-                    "hook": f"Impossible de trouver {name} en ligne — les voyageurs qui cherchent "
+                    "hook": f"Impossible de trouver {name} en ligne, les voyageurs qui cherchent "
                     f"un {type_label} à {city} ne vous trouvent tout simplement pas.",
                 }
             )
@@ -369,7 +396,7 @@ class AIService:
                         "key": "google_invisible",
                         "weight": 85,
                         "label": "Invisible sur Google",
-                        "hook": f"0 mot-clé positionné sur Google — {name} n'existe pas dans les résultats "
+                        "hook": f"0 mot-clé positionné sur Google, {name} n'existe pas dans les résultats "
                         f"de recherche. Autant dire invisible pour « {type_label} à {city} ».",
                     }
                 )
@@ -379,7 +406,7 @@ class AIService:
                         "key": "google_faible",
                         "weight": 65,
                         "label": "Très faible présence Google",
-                        "hook": f"Seulement {lead.dataforseo_organic_keywords} mots-clés sur Google — "
+                        "hook": f"Seulement {lead.dataforseo_organic_keywords} mots-clés sur Google, "
                         f"pour un {type_label} en {city}, c'est très sous-exploité.",
                     }
                 )
@@ -394,7 +421,7 @@ class AIService:
                     "key": "zero_trafic",
                     "weight": 80,
                     "label": "Aucun trafic Google",
-                    "hook": f"0 visiteur par mois depuis Google — tout le trafic passe à côté de {name}.",
+                    "hook": f"0 visiteur par mois depuis Google, tout le trafic passe à côté de {name}.",
                 }
             )
 
@@ -405,7 +432,7 @@ class AIService:
                     "key": "pas_mobile",
                     "weight": 75,
                     "label": "Site non adapté mobile",
-                    "hook": f"Le site de {name} ne s'affiche pas correctement sur téléphone — "
+                    "hook": f"Le site de {name} ne s'affiche pas correctement sur téléphone, "
                     f"or +60% des recherches hôtelières se font sur mobile.",
                 }
             )
@@ -417,7 +444,7 @@ class AIService:
                     "key": "pas_resa_directe",
                     "weight": 70,
                     "label": "Pas de réservation directe",
-                    "hook": f"Aucun moteur de réservation sur le site — les visiteurs sont redirigés "
+                    "hook": f"Aucun moteur de réservation sur le site, les visiteurs sont redirigés "
                     f"vers des plateformes tierces, avec les commissions qui vont avec.",
                 }
             )
@@ -429,7 +456,7 @@ class AIService:
                     "key": "mauvais_seo",
                     "weight": 65,
                     "label": "SEO très faible",
-                    "hook": f"Score SEO de {lead.seo_score}/100 — le site n'est pas construit pour "
+                    "hook": f"Score SEO de {lead.seo_score}/100, le site n'est pas construit pour "
                     f"être trouvé par les moteurs de recherche.",
                 }
             )
@@ -453,7 +480,7 @@ class AIService:
                     "key": "mauvais_avis",
                     "weight": 50,
                     "label": "Avis Google en difficulté",
-                    "hook": f"Note Google de {lead.google_rating}/5 — les voyageurs consultent "
+                    "hook": f"Note Google de {lead.google_rating}/5, les voyageurs consultent "
                     f"les avis avant de réserver, c'est un frein visible.",
                 }
             )
@@ -465,8 +492,7 @@ class AIService:
                     "key": "site_casse",
                     "weight": 92,
                     "label": "Site web inaccessible",
-                    "hook": f"L'URL de {name} existe mais le site est inaccessible — un voyageur "
-                    f"qui tombe sur une page d'erreur repart en 3 secondes.",
+                    "hook": f"L'URL de {name} existe mais le site est inaccessible - le parcours visiteur peut être bloqué.",
                 }
             )
 
@@ -543,14 +569,30 @@ class AIService:
                     )
             else:
                 context_parts.append(
-                    "Système de réservation en direct: NON — pas de moteur de réservation sur le site, le visiteur est redirigé vers une plateforme tierce"
+                    "Système de réservation en direct: NON, pas de moteur de réservation sur le site, le visiteur est redirigé vers une plateforme tierce"
                 )
                 if lead.booking_platform:
                     context_parts.append(
                         f"Plateforme tierce détectée (NE PAS nommer dans le message): {lead.booking_platform}"
                     )
 
-        # Données DataForSEO — métriques Google réelles
+        # Audit concret du site (constats réels à transformer en arguments)
+        audit = lead.website_audit or {}
+        findings = audit.get("findings") if isinstance(audit, dict) else None
+        if findings:
+            context_parts.append("")
+            context_parts.append("═══ AUDIT CONCRET DU SITE (constats réels) ═══")
+            for f in findings:
+                context_parts.append(f"- {f}")
+            context_parts.append(
+                "INSTRUCTION : nommer 2 ou 3 de ces constats dans le message comme "
+                "observations factuelles, puis montrer ce que Kawanah apporte en face "
+                "(responsive et design moderne, formulaires de contact et de réservation "
+                "en direct, avis clients mis en avant, carte d'accès, visibilité Google + IA)."
+            )
+            context_parts.append("")
+
+        # Données DataForSEO, métriques Google réelles
         if lead.dataforseo_domain_rank is not None:
             context_parts.append(
                 f"Autorité de domaine Google (DataForSEO): {lead.dataforseo_domain_rank}/100"
@@ -588,7 +630,7 @@ class AIService:
             months = ((_d.today() - lead.established_date).days) / 30
             if months <= 18:
                 context_parts.append(
-                    f"Date de création (INSEE) : {lead.established_date.strftime('%B %Y')} — établissement récent ({int(months)} mois)"
+                    f"Date de création (INSEE) : {lead.established_date.strftime('%B %Y')}, établissement récent ({int(months)} mois)"
                 )
             else:
                 context_parts.append(
@@ -610,7 +652,7 @@ class AIService:
             context_parts.append("")
             context_parts.append("═══ ARGUMENTS FORTS (par ordre d'impact) ═══")
             for i, arg in enumerate(strong_args[:5], 1):
-                context_parts.append(f"#{i} [{arg['label']}] — {arg['hook']}")
+                context_parts.append(f"#{i} [{arg['label']}] : {arg['hook']}")
             context_parts.append("")
             context_parts.append(
                 "INSTRUCTION CRITIQUE : Le message DOIT s'appuyer sur l'argument #1 "
@@ -640,7 +682,9 @@ class AIService:
         """
         if not self.client:
             # Mode démo sans API
-            return self._generate_demo_message(lead, channel, tone, sender_name)
+            return self._generate_demo_message(
+                lead, channel, tone, sender_name, custom_instructions
+            )
 
         template = MessageTemplates.get_template(lead)
         lead_context = self._build_lead_context(lead)
@@ -656,13 +700,13 @@ class AIService:
                 "Format email.\n"
                 "OBJET : 3 à 6 mots max. Factuel, jamais vendeur, jamais générique. "
                 "Pas de majuscules partout, pas de !, pas d'emoji. "
-                "Exemples selon segment — "
+                "Exemples selon segment, "
                 "NOUVELLE STRUCTURE (ouverture récente) : 'félicitations pour votre ouverture' ou 'belle ouverture à [ville]'. Toujours positif, célébrer le lancement. "
-                "SANS SITE : 'j'ai cherché [nom] en ligne' ou '[nom] — introuvable sur Google'. "
-                "MAUVAIS SEO : '0 visiteur Google — [nom]' ou 'Google ne vous voit pas'. "
+                "SANS SITE : 'j'ai cherché [nom] en ligne' ou '[nom], introuvable sur Google'. "
+                "MAUVAIS SEO : 'présence Google à vérifier' ou '[nom] sur Google'. "
                 "GEO/IA : 'ce que ChatGPT dit de vous' ou 'ChatGPT connaît-il [nom] ?'. "
-                "SITE CASSÉ : 'votre site — erreur ce matin'. "
-                "PAS DE RÉSA DIRECTE : 'vos réservations passent par Booking ?' ou 'réservation directe — [nom]'. "
+                "SITE CASSÉ : 'votre site, erreur ce matin'. "
+                "PAS DE RÉSA DIRECTE : 'réservation directe, [nom]' ou 'réserver chez vous directement'. "
                 "Corps : 5-7 lignes max, paragraphes courts."
             ),
             MessageChannel.LINKEDIN: (
@@ -671,18 +715,19 @@ class AIService:
             ),
         }[channel]
 
-        booking_link = settings.booking_link
         seasonal = self._get_seasonal_context()
 
         prompt = f"""Tu es Laetitia, spécialiste web & référencement pour l'hospitalité chez Kawanah Tourisme.
 Tu prospectes des établissements touristiques (hôtels, campings, gîtes, chambres d'hôtes).
-Tu n'es pas commerciale — tu es experte. Ton approche : méthode A.I.D.A, pair-à-pair, détendu.
-Chaque email suit la structure : Attention (accroche factuelle sur SA situation) → Intérêt (enjeu concret pour lui) → Désir (ce que ça changerait) → Action (question ouverte + lien rendez-vous).
+Tu n'es pas commerciale - tu écris comme une experte qui partage une observation utile.
+Chaque email suit une structure simple : observation concrète, lecture prudente, question ouverte.
 
 {MessageTemplates.STYLE_RULES}
 
 CONTEXTE DU PROSPECT :
 {lead_context}
+
+{MessageTemplates.OFFER_CONTEXT}
 
 STRATÉGIE POUR CE SEGMENT :
 {template}
@@ -690,17 +735,18 @@ STRATÉGIE POUR CE SEGMENT :
 CONTEXTE SAISONNIER (à glisser naturellement dans le message, sans le plaquer) :
 En ce moment : {seasonal['hook']}.
 Angle utile : {seasonal['angle']}.
-Ne pas citer ces phrases mot pour mot — les intégrer naturellement dans l'accroche ou la conséquence.
+Ne pas citer ces phrases mot pour mot. Les intégrer seulement si ça rend le message plus naturel.
 
 FORMAT :
 {channel_format}
 Ton : {tone_nuance}
 Contexte géographique : adapte naturellement au territoire ({self._get_regional_context(lead) or lead.city or 'France'}).
-Vocabulaire : adapté au type — un camping a des emplacements pas des chambres, un gîte accueille des hôtes.
-{f"Instructions complémentaires : {custom_instructions}" if custom_instructions else ""}
+Vocabulaire : adapté au type, un camping a des emplacements pas des chambres, un gîte accueille des hôtes.
+{f"INSTRUCTIONS MANUELLES PRIORITAIRES À INTÉGRER EXPLICITEMENT : {custom_instructions}" if custom_instructions else ""}
 
-CTA : terminer par une question ouverte + proposer le lien de rendez-vous en option légère.
-Format exact : "...ou si vous préférez qu'on en parle directement : {booking_link}"
+CTA : terminer par une question ouverte simple, puis OBLIGATOIREMENT, sur une nouvelle ligne juste avant la formule de politesse, la phrase EXACTE suivante (mot pour mot, sans la modifier) :
+On peut prendre un rendez-vous pour en parler : {settings.booking_link}
+Rythme : phrases courtes, pas de démonstration longue, pas de ton d'audit.
 
 Génère le message au format exact suivant (rien d'autre) :
 OBJET: [sujet bref et factuel]
@@ -708,7 +754,8 @@ OBJET: [sujet bref et factuel]
 [corps du message]
 
 {sender_name}
-Kawanah Tourisme"""
+Kawanah Tourisme
+https://tourisme.kawanah.com/"""
 
         try:
             response = self.client.messages.create(
@@ -722,7 +769,9 @@ Kawanah Tourisme"""
 
         except Exception as e:
             logger.error(f"Erreur génération message: {e}")
-            return self._generate_demo_message(lead, channel, tone, sender_name)
+            return self._generate_demo_message(
+                lead, channel, tone, sender_name, custom_instructions
+            )
 
     def _parse_response(
         self, response: str, lead: Lead, channel: MessageChannel, tone: MessageTone
@@ -760,21 +809,110 @@ Kawanah Tourisme"""
             personalization_points=personalization,
         )
 
+    def _compose_audit_message(
+        self,
+        lead: Lead,
+        channel: MessageChannel,
+        tone: MessageTone,
+        name: str,
+        type_label: str,
+        visitors_word: str,
+        booking_cta: str,
+        signature: str,
+        polite: str,
+        audit: dict,
+        findings: list,
+    ) -> GeneratedMessage:
+        """
+        Message vendeur construit à partir de l'audit concret du site.
+        Nomme les manques réels, montre l'enjeu, puis ce que Kawanah apporte (avec USP SEO & IA natif).
+        """
+        # Constats concrets (2 à 3, directement issus de l'audit)
+        constats = " ; ".join(findings[:3])
+
+        # Ce que Kawanah met en face, mappé sur les manques réels
+        solutions: list[str] = []
+        if not audit.get("is_mobile_friendly"):
+            solutions.append("un site responsive et moderne")
+        if (
+            audit.get("design_dated")
+            and "un site responsive et moderne" not in solutions
+        ):
+            solutions.append("un design dynamique et actuel")
+        if not audit.get("has_reservation"):
+            solutions.append("la réservation en direct")
+        if not audit.get("has_contact_form"):
+            solutions.append("un formulaire de contact")
+        if not audit.get("has_embedded_reviews"):
+            solutions.append("vos avis clients mis en avant")
+        if not audit.get("has_map"):
+            solutions.append("une carte d'accès")
+        solutions = solutions[:4]
+        solutions_txt = (
+            ", ".join(solutions) if solutions else "un site moderne et performant"
+        )
+
+        subject = f"{name} : un site qui convertit mieux"
+        body = f"""Bonjour,
+
+J'ai regardé votre site : {lead.website}. Votre {type_label} a clairement de quoi plaire, mais en ligne le site ne lui rend pas encore justice.
+
+Concrètement : {constats}.
+
+Pour transformer un visiteur en client, il faut pouvoir réserver en direct, vous situer en un coup d'œil et se rassurer avec les avis d'autres {visitors_word}.
+
+Chez Kawanah, on reprend le site avec {solutions_txt}, et surtout un socle SEO et IA natif pour être visible sur Google comme sur les moteurs IA type ChatGPT.
+
+Je vous montre en 15 min ce que ça donnerait pour {name}.
+
+{booking_cta}
+
+{polite}
+
+{signature}"""
+
+        return GeneratedMessage(
+            subject=subject,
+            body=body,
+            channel=channel,
+            tone=tone,
+            lead_segment=lead.priority_level,
+            personalization_points=[
+                "nom_etablissement",
+                "site_web",
+                "audit_site",
+                "type",
+            ],
+        )
+
     def _generate_demo_message(
         self,
         lead: Lead,
         channel: MessageChannel,
         tone: MessageTone,
         sender_name: str = "Laetitia",
+        custom_instructions: Optional[str] = None,
     ) -> GeneratedMessage:
         """Génère un message de démo sans API, contextuellement pertinent."""
         priority = lead.priority_level
         name = lead.name
         city = lead.city or "votre région"
-        booking_link = settings.booking_link
-        seasonal = self._get_seasonal_context()
-        signature = f"{sender_name} pour Kawanah Tourisme\ntravel.kawanah.com"
-        cta_link = f"ou si vous préférez qu'on en parle directement : {booking_link}"
+        if "kawanah" in sender_name.lower():
+            signature = f"{sender_name}\nhttps://tourisme.kawanah.com/"
+        else:
+            signature = (
+                f"{sender_name} pour Kawanah Tourisme\nhttps://tourisme.kawanah.com/"
+            )
+        website_reference = (
+            f"J'ai regardé votre site : {lead.website}."
+            if lead.website
+            else "J'ai regardé votre site."
+        )
+        booking_cta = (
+            f"On peut prendre un rendez-vous pour en parler : {settings.booking_link}"
+            if settings.booking_link
+            else ""
+        )
         type_label = self._get_type_label(lead)
 
         # Contexte géographique pour personnaliser
@@ -801,7 +939,7 @@ Kawanah Tourisme"""
         if lead.star_rating:
             star_info = f" ({lead.star_rating})"
 
-        # Détection nouvelle structure — date INSEE en priorité, proxy avis en fallback
+        # Détection nouvelle structure, date INSEE en priorité, proxy avis en fallback
         from datetime import date as _date
 
         is_new = False
@@ -844,20 +982,134 @@ Kawanah Tourisme"""
         strong_args = self._detect_strong_arguments(lead)
         top_key = strong_args[0]["key"] if strong_args else None
 
-        # ── Messages selon l'argument fort #1 — voix Laetitia, diagnostic partagé ──────
+        # ── Messages selon l'argument fort #1, voix Laetitia, diagnostic partagé ──────
 
         # Formule de politesse (rotation légère)
         polite = "Belle journée,"
 
-        if is_plateforme_gite:
-            subject = f"{name} - visibilité hors {plateforme_nom}"
+        # ── Cas principal : site existant + audit concret → message vendeur ──────
+        audit = lead.website_audit if isinstance(lead.website_audit, dict) else {}
+        findings = audit.get("findings") or []
+        # Fallback : leads analysés avant l'audit détaillé → dériver des constats des champs connus
+        if not findings and lead.website:
+            derived = []
+            if lead.is_mobile_friendly is False:
+                derived.append("le site n'est pas adapté au mobile (pas responsive)")
+            if (
+                lead.website_quality_score is not None
+                and lead.website_quality_score < 45
+            ):
+                derived.append("le design est daté et manque de modernité")
+            if lead.has_booking_system is False:
+                derived.append("aucune réservation en direct sur le site")
+            if lead.seo_score is not None and lead.seo_score < 40:
+                derived.append("le site est peu visible sur Google")
+            findings = derived
+            if derived and not audit:
+                audit = {
+                    "is_mobile_friendly": lead.is_mobile_friendly,
+                    "has_reservation": lead.has_booking_system,
+                    "design_dated": (lead.website_quality_score or 100) < 45,
+                    # Signaux non audités → considérés présents pour ne pas survendre
+                    "has_contact_form": True,
+                    "has_embedded_reviews": True,
+                    "has_map": True,
+                }
+        if (
+            lead.website
+            and findings
+            and not is_plateforme_gite
+            and not custom_instructions
+        ):
+            return self._compose_audit_message(
+                lead,
+                channel,
+                tone,
+                name,
+                type_label,
+                visitors_word,
+                booking_cta,
+                signature,
+                polite,
+                audit,
+                findings,
+            )
+
+        if custom_instructions:
+            subject = f"{name} - mise en valeur en ligne"
+            landing_angle = (
+                "une page simple et claire"
+                if "landing" in custom_instructions.lower()
+                or "one page" in custom_instructions.lower()
+                else "une page dédiée"
+            )
+            location_angle = (
+                "avec une carte pour aider les visiteurs à vous situer immédiatement"
+                if "carte" in custom_instructions.lower()
+                or "géolocal" in custom_instructions.lower()
+                or "geolocal" in custom_instructions.lower()
+                else "avec un parcours plus lisible pour les visiteurs"
+            )
+            reviews_angle = (
+                "et une meilleure intégration de vos avis clients"
+                if "avis" in custom_instructions.lower()
+                else "et une mise en valeur plus directe de l'expérience proposée"
+            )
             body = f"""Bonjour,
 
-{plateforme_nom}, c'est un label solide - ça rassure les voyageurs et ça légitime votre offre.
+{website_reference}
 
-Ce que je remarque souvent, c'est que toute la visibilité passe par la plateforme. Aucun trafic direct vers {name}, aucune acquisition en propre. Et quand un voyageur demande à ChatGPT ou Perplexity un {type_label} à {city}, {plateforme_nom} n'apparaît pas, et votre nom non plus.
+Il y a peut-être une piste assez concrète : {landing_angle}, {location_angle}, {reviews_angle}.
 
-Vous avez déjà pensé à avoir un site en propre, pour capter des réservations directes et exister au-delà de {plateforme_nom} ? Répondez-moi ici, {cta_link}
+L'idée ne serait pas de tout refaire, plutôt de créer un point d'entrée plus lisible pour améliorer la visibilité et faciliter le premier contact.
+
+Vous aviez déjà envisagé ce type de mise en valeur pour {name} ?
+
+{booking_cta}
+
+{polite}
+
+{signature}"""
+            return GeneratedMessage(
+                subject=subject,
+                body=body,
+                channel=channel,
+                tone=tone,
+                lead_segment=priority,
+                personalization_points=[
+                    "instructions_manuelles",
+                    "nom_etablissement",
+                    "site_web",
+                ],
+            )
+
+        if top_key == "site_wix_sans_domaine":
+            subject = f"{name} - site"
+            body = f"""Bonjour,
+
+{website_reference}
+
+On sent qu'il y a un vrai lieu derrière, avec de bons retours clients.
+
+Le site pourrait peut-être passer un cap côté navigation, mise en valeur du lieu et réservation directe.
+
+Vous aviez déjà prévu une mise à niveau technique du site ?
+
+{booking_cta}
+
+{polite}
+
+{signature}"""
+
+        elif is_plateforme_gite:
+            subject = f"{name} et {plateforme_nom}"
+            body = f"""Bonjour,
+
+J'ai vu {name} via {plateforme_nom}.
+
+C'est une bonne base, mais je me demandais si vous aviez aussi une présence à vous, en dehors de la plateforme.
+
+Vous avez déjà prévu quelque chose dans ce sens, ou ce n'est pas le sujet pour le moment ?
 
 {polite}
 
@@ -890,28 +1142,30 @@ Vous avez déjà pensé à avoir un site en propre, pour capter des réservation
 
             secondary_line = ""
             if secondary_notes:
-                secondary_line = f"\n\nEn regardant de plus près : {', '.join(secondary_notes)}. Autant de réservations qui passent à côté."
+                secondary_line = f"\n\nEn regardant de plus près : {', '.join(secondary_notes)}. Ce sont des points qui peuvent freiner le parcours visiteur."
 
             if quality < 25:
-                subject = f"{name} - votre site a besoin d'une refonte"
+                subject = f"{name} - site"
                 body = f"""Bonjour,
 
-J'ai visité le site de {name}{star_info} - pour être honnête, il ne reflète pas du tout ce que vous proposez. Design d'une autre époque, pas aux standards actuels.
+{website_reference}
 
-Un {visitors_word} qui cherche un {type_label} à {city} compare 3-4 sites avant de réserver. Avec un site comme ça, il passe au suivant.{secondary_line}
+Il y a sûrement une belle adresse derrière, mais en ligne l'image paraît un peu en retrait.{secondary_line}
 
-Est-ce que la refonte du site c'est quelque chose que vous avez en projet ? En ce moment {seasonal['hook']} - répondez-moi ici, {cta_link}
+Vous avez déjà une mise à jour prévue, ou ce n'est pas encore dans vos priorités ?
 
 {polite}
 
 {signature}"""
             else:
-                subject = f"{name} - votre site commence à dater"
+                subject = f"{name} - présence en ligne"
                 body = f"""Bonjour,
 
-J'ai visité le site de {name}{star_info} - il fait le job, mais face à la concurrence à {city}, il accuse son âge. La première impression en ligne, c'est souvent ce qui fait la différence entre une réservation et un rebond.{secondary_line}
+{website_reference}
 
-C'est quelque chose que vous avez eu le temps de regarder ? En ce moment {seasonal['hook']} - répondez-moi ici, {cta_link}
+Le site fait le job, mais certains détails donnent l'impression qu'il pourrait être remis au niveau de ce que vous proposez aujourd'hui.{secondary_line}
+
+Vous avez déjà prévu de le reprendre, ou ce n'est pas le moment ?
 
 {polite}
 
@@ -928,42 +1182,44 @@ C'est quelque chose que vous avez eu le temps de regarder ? En ce moment {season
                 opening_ref = f"à {city}"
                 age_note = ""
 
-            subject = f"Félicitations pour l'ouverture {opening_ref}"
+            subject = f"Félicitations pour {name}"
             body = f"""Bonjour,
 
-Félicitations pour l'ouverture de {name}{star_info} {opening_ref} {age_note} - belle aventure qui commence.
+Félicitations pour {name}{star_info} {opening_ref}.
 
-Les établissements qui posent leur présence en ligne dès les premiers mois captent leurs premiers clients bien plus vite. Google et ChatGPT indexent un site bien structuré en quelques semaines - c'est une fenêtre courte à saisir au départ.
+Je regardais votre présence en ligne, justement parce que les premiers mois posent souvent les bases pour la suite.
 
-Vous avez déjà quelque chose en cours côté site, ou c'est encore en liste d'attente ? Répondez-moi ici, {cta_link}
+Vous avez déjà prévu quelque chose côté site ou visibilité locale ?
 
 {polite}
 
 {signature}"""
 
         elif "SANS SITE" in priority:
-            subject = f"j'ai cherché {name} en ligne"
+            subject = f"{name} en ligne"
             body = f"""Bonjour,
 
-En cherchant un {type_label} à {city}, impossible de trouver de site pour {name}{star_info}.
+En cherchant {name}{star_info}, je n'ai pas trouvé de site propre associé à l'établissement.
 
-Les {visitors_word} qui passent par là font pareil - ils passent leur chemin, pas par manque d'intérêt, juste parce qu'il n'y a rien à trouver.
+Peut-être que c'est volontaire, mais je voulais vous le signaler parce que l'information est moins directe à trouver.
 
-C'est un choix délibéré ou c'est en projet ? En ce moment {seasonal['hook']} - répondez-moi ici, {cta_link}
+Vous avez prévu d'en créer un, ou vous préférez rester sur les canaux actuels ?
 
 {polite}
 
 {signature}"""
 
         elif "VÉRIFIER" in priority:
-            subject = f"{name} - erreur sur votre site"
+            subject = f"{name} - accès au site"
             body = f"""Bonjour,
 
-J'ai essayé d'accéder au site de {name}{star_info} ce matin - j'ai eu une erreur de chargement.
+{website_reference}
 
-Un voyageur qui tombe là-dessus repart en 3 secondes, c'est mécanique.
+Je suis tombée sur une erreur de chargement.
 
-Vous étiez au courant ? Répondez-moi ici, {cta_link}
+Je ne sais pas si c'est ponctuel, mais je préfère vous le signaler.
+
+Vous l'aviez déjà vu de votre côté ?
 
 {polite}
 
@@ -971,34 +1227,46 @@ Vous étiez au courant ? Répondez-moi ici, {cta_link}
 
         elif "CHAUD" in priority:
             if lead.dataforseo_organic_keywords == 0:
-                subject = f"Google ne voit pas {name}"
-                opening = f"J'ai regardé la présence Google de {name}{star_info} - 0 mot-clé positionné."
-                consequence = f"Concrètement, quand quelqu'un cherche un {type_label} à {city}, vous n'existez pas dans les résultats."
+                subject = f"{name} sur Google"
+                opening = (
+                    f"J'ai regardé rapidement la présence Google de {name}{star_info}."
+                )
+                consequence = "Je n'ai pas vu de mot-clé positionné, donc il y a peut-être quelque chose à vérifier côté visibilité."
             elif (
                 lead.dataforseo_organic_keywords is not None
                 and lead.dataforseo_organic_keywords < 10
             ):
-                subject = (
-                    f"{lead.dataforseo_organic_keywords} mots-clés Google - {name}"
-                )
-                opening = f"J'ai regardé le référencement de {name}{star_info} - {lead.dataforseo_organic_keywords} mots-clés positionnés sur Google."
-                consequence = f"Pour un {type_label} en {local_hook}, c'est vraiment sous-exploité."
+                subject = f"{name} sur Google"
+                opening = f"J'ai regardé le référencement de {name}{star_info}."
+                consequence = f"Il y a {lead.dataforseo_organic_keywords} mots-clés positionnés sur Google, ce qui laisse peut-être une marge à explorer."
             elif lead.dataforseo_organic_traffic == 0:
-                subject = f"0 visiteur Google - {name}"
-                opening = f"J'ai regardé le trafic de {name}{star_info} - aucun visiteur issu de Google en ce moment."
-                consequence = f"Pour des {visitors_word} qui cherchent en {local_hook}, c'est beaucoup de réservations perdues."
+                subject = f"{name} - visibilité Google"
+                opening = f"J'ai regardé le trafic de {name}{star_info}."
+                consequence = "Je ne vois pas de trafic issu de Google en ce moment, donc je me demandais si ce point avait déjà été regardé."
             elif top_key == "pas_mobile":
-                subject = f"{name} - invisible sur mobile"
-                opening = f"J'ai visité le site de {name}{star_info} depuis mon téléphone - l'expérience est compliquée."
-                consequence = f"Plus de 60% des {visitors_word} cherchent depuis leur mobile. Un site qui ne s'affiche pas bien, c'est autant de réservations perdues."
+                subject = f"{name} sur mobile"
+                opening = (
+                    f"J'ai ouvert votre site depuis mon téléphone : {lead.website}."
+                    if lead.website
+                    else f"J'ai ouvert le site de {name}{star_info} depuis mon téléphone."
+                )
+                consequence = "L'expérience m'a semblé un peu difficile, surtout pour lire vite ou aller plus loin."
             elif top_key == "pas_resa_directe":
                 subject = f"{name} - vos réservations passent par un intermédiaire"
-                opening = f"J'ai voulu réserver sur le site de {name}{star_info} - pas de moteur de réservation, je suis redirigé vers une plateforme tierce."
-                consequence = f"Un moteur de réservation intégré = plus de réservations directes, moins de commissions."
+                opening = (
+                    f"J'ai regardé le parcours de réservation sur votre site : {lead.website}."
+                    if lead.website
+                    else f"J'ai regardé le parcours de réservation sur le site de {name}{star_info}."
+                )
+                consequence = "J'ai l'impression qu'il passe par un intermédiaire, donc je me demandais si la réservation directe était un sujet chez vous."
             else:
                 subject = f"{name} - votre présence en ligne"
-                opening = f"J'ai regardé la présence en ligne de {name}{star_info} - il y a du potentiel inexploité."
-                consequence = f"En ce moment les {visitors_word} cherchent activement en {local_hook}, c'est le bon moment pour se démarquer."
+                opening = (
+                    f"J'ai regardé votre site : {lead.website}."
+                    if lead.website
+                    else f"J'ai regardé la présence en ligne de {name}{star_info}."
+                )
+                consequence = "Il y a quelques points qui mériteraient peut-être d'être clarifiés, selon vos priorités du moment."
 
             body = f"""Bonjour,
 
@@ -1006,7 +1274,7 @@ Vous étiez au courant ? Répondez-moi ici, {cta_link}
 
 {consequence}
 
-C'est quelque chose que vous avez eu le temps de regarder ? En ce moment {seasonal['hook']} - répondez-moi ici, {cta_link}
+Vous avez déjà prévu de regarder ça ?
 
 {polite}
 
@@ -1029,16 +1297,20 @@ C'est quelque chose que vous avez eu le temps de regarder ? En ce moment {season
             ):
                 opening = f"J'ai regardé la présence Google de {name}{star_info} - {lead.dataforseo_organic_keywords} mots-clés positionnés, c'est honnête."
             else:
-                opening = f"J'ai regardé le site de {name}{star_info} - bien construit."
+                opening = (
+                    f"J'ai regardé votre site : {lead.website} - bien construit."
+                    if lead.website
+                    else f"J'ai regardé le site de {name}{star_info} - bien construit."
+                )
 
-            subject = f"ChatGPT connaît-il {name} ?"
+            subject = f"{name} et les recherches IA"
             body = f"""Bonjour,
 
 {opening}
 
-Une question : est-ce que vous savez ce que ChatGPT répond quand quelqu'un lui demande le meilleur {type_label} à {city} ?
+Je me demandais si vous aviez déjà regardé ce que les moteurs IA répondent quand quelqu'un cherche un {type_label} à {city}.
 
-J'ai fait le test pour {name} - je vous envoie le résultat si ça vous intéresse. Ou directement : {cta_link}
+J'ai fait un premier test pour {name}, je peux vous partager ce que j'ai vu si le sujet vous intéresse.
 
 Au plaisir d'échanger,
 

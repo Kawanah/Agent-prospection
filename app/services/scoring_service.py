@@ -57,6 +57,17 @@ class WebsiteAnalysisResult:
     is_mobile_friendly: bool = False
     has_viewport_meta: bool = False
 
+    # Fonctionnalités concrètes (audit pour argumentaire commercial)
+    has_contact_form: bool = False
+    has_reservation: bool = False  # Réservation en direct (formulaire ou moteur)
+    has_booking_system: bool = False  # Alias de has_reservation (compat lead)
+    booking_platforms: list = field(default_factory=list)  # Moteurs détectés
+    has_embedded_reviews: bool = False  # Avis clients affichés sur le site
+    has_map: bool = False  # Carte d'accès / plan de localisation
+    has_photo_gallery: bool = False  # Galerie / mise en valeur photo
+    design_dated: bool = False  # Design visuellement daté
+    audit_findings: list = field(default_factory=list)  # Constats concrets (FR)
+
     # Technique
     uses_https: bool = False
     load_time_ms: Optional[int] = None
@@ -163,6 +174,7 @@ class WebsiteAnalyzer:
             self._analyze_geo(result, soup, html)
             self._analyze_mobile(result, soup, html)
             self._analyze_quality(result, soup, html)
+            self._analyze_features(result, soup, html)
 
             result.success = True
 
@@ -186,6 +198,7 @@ class WebsiteAnalyzer:
                             self._analyze_geo(result, soup, html)
                             self._analyze_mobile(result, soup, html)
                             self._analyze_quality(result, soup, html)
+                            self._analyze_features(result, soup, html)
                         result.success = True
                         return result
                 except Exception:
@@ -566,6 +579,158 @@ class WebsiteAnalyzer:
         # === FINALISATION ===
         result.quality_score = max(0, min(100, score))
 
+    # Moteurs de réservation hôtelière courants (signal de réservation directe)
+    BOOKING_ENGINES = [
+        "amenitiz",
+        "reservit",
+        "thais",
+        "d-edge",
+        "availpro",
+        "cubilis",
+        "secutix",
+        "guestonline",
+        "zenchef",
+        "elloha",
+        "booking-engine",
+        "synxis",
+        "mews",
+        "bookassist",
+        "vega",
+        "open-pro",
+        "anytime",
+        "lodgify",
+    ]
+
+    def _analyze_features(
+        self, result: WebsiteAnalysisResult, soup: BeautifulSoup, html: str
+    ):
+        """
+        Détecte les fonctionnalités concrètes du site et construit la liste
+        des constats d'audit utilisés comme arguments commerciaux.
+        """
+        html_lower = html.lower()
+
+        # --- Formulaire de contact ---
+        forms = soup.find_all("form")
+        has_textarea = bool(soup.find("textarea"))
+        has_email_input = bool(soup.find("input", attrs={"type": "email"}))
+        contact_keywords = any(
+            kw in html_lower for kw in ["nous contacter", "formulaire de contact"]
+        )
+        result.has_contact_form = bool(
+            (forms and (has_textarea or has_email_input)) or contact_keywords
+        )
+
+        # --- Réservation en direct (moteur ou formulaire de réservation) ---
+        detected_engines = [eng for eng in self.BOOKING_ENGINES if eng in html_lower]
+        engine = bool(detected_engines)
+        reservation_keywords = any(
+            kw in html_lower
+            for kw in [
+                "réserver",
+                "reserver",
+                "réservation en ligne",
+                "reservation en ligne",
+                "vérifier les disponibilités",
+                "verifier les disponibilites",
+                "book now",
+                "check availability",
+            ]
+        )
+        form_action_resa = any(
+            "reserv" in (f.get("action", "") or "").lower()
+            or "booking" in (f.get("action", "") or "").lower()
+            for f in forms
+        )
+        result.has_reservation = bool(
+            engine or form_action_resa or reservation_keywords
+        )
+        result.has_booking_system = result.has_reservation
+        result.booking_platforms = detected_engines
+
+        # --- Avis clients affichés sur le site ---
+        result.has_embedded_reviews = any(
+            kw in html_lower
+            for kw in [
+                "tripadvisor",
+                "elfsight",
+                "trustindex",
+                "aggregaterating",
+                "avis clients",
+                "avis google",
+                "google reviews",
+                "témoignages",
+                "temoignages",
+            ]
+        )
+
+        # --- Carte d'accès / localisation ---
+        map_in_iframe = any(
+            "google.com/maps" in (i.get("src", "") or "").lower()
+            or "maps.google" in (i.get("src", "") or "").lower()
+            or "openstreetmap" in (i.get("src", "") or "").lower()
+            for i in soup.find_all("iframe")
+        )
+        result.has_map = bool(
+            map_in_iframe
+            or any(
+                kw in html_lower
+                for kw in ["leaflet", "mapbox", "gmp-map", "maps.googleapis"]
+            )
+        )
+
+        # --- Galerie photos ---
+        img_count = len(soup.find_all("img"))
+        result.has_photo_gallery = bool(
+            img_count >= 8
+            or any(
+                kw in html_lower
+                for kw in [
+                    "galerie",
+                    "gallery",
+                    "lightbox",
+                    "fancybox",
+                    "swiper",
+                    "slick",
+                ]
+            )
+        )
+
+        # --- Design daté (score qualité bas) ---
+        result.design_dated = result.quality_score < 45
+
+        # --- Construction des constats concrets (ordre = priorité argumentaire) ---
+        findings: list[str] = []
+        if not result.is_mobile_friendly:
+            findings.append("le site n'est pas adapté au mobile (pas responsive)")
+        if result.design_dated:
+            findings.append("le design est daté et manque de modernité")
+        if not result.has_reservation:
+            findings.append("aucune réservation en direct sur le site")
+        if not result.has_contact_form:
+            findings.append("pas de formulaire de contact")
+        if not result.has_embedded_reviews:
+            findings.append("les avis clients ne sont pas affichés sur le site")
+        if not result.has_map:
+            findings.append("pas de carte d'accès ni de plan de localisation")
+        if not result.has_photo_gallery:
+            findings.append("peu de mise en valeur photo du lieu")
+        result.audit_findings = findings
+
+
+def build_website_audit(analysis: WebsiteAnalysisResult) -> dict:
+    """Construit le dict d'audit concret stocké sur le lead (lead.website_audit)."""
+    return {
+        "is_mobile_friendly": analysis.is_mobile_friendly,
+        "has_contact_form": analysis.has_contact_form,
+        "has_reservation": analysis.has_reservation,
+        "has_embedded_reviews": analysis.has_embedded_reviews,
+        "has_map": analysis.has_map,
+        "has_photo_gallery": analysis.has_photo_gallery,
+        "design_dated": analysis.design_dated,
+        "findings": analysis.audit_findings,
+    }
+
 
 class ScoringService:
     """Service principal de scoring des leads."""
@@ -618,6 +783,8 @@ class ScoringService:
                 lead.seo_score = analysis_result.seo_score
                 lead.geo_score = analysis_result.geo_score
                 lead.is_mobile_friendly = analysis_result.is_mobile_friendly
+                lead.has_booking_system = analysis_result.has_reservation
+                lead.website_audit = build_website_audit(analysis_result)
                 lead.has_website = True
             else:
                 # Site inaccessible (erreur 5xx, timeout, etc.)
@@ -649,6 +816,8 @@ class ScoringService:
                     lead.seo_score = analysis_result.seo_score
                     lead.geo_score = analysis_result.geo_score
                     lead.is_mobile_friendly = analysis_result.is_mobile_friendly
+                    lead.has_booking_system = analysis_result.has_reservation
+                    lead.website_audit = build_website_audit(analysis_result)
             else:
                 lead.has_website = False
                 logger.info(

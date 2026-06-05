@@ -17,7 +17,7 @@ from sqlalchemy import select, func
 from app.config import get_settings
 from app.models.lead import Lead, LeadStatus, LeadType
 from app.agent.agent_tools import AGENT_TOOLS, ToolResult
-from app.services.scoring_service import WebsiteAnalyzer
+from app.services.scoring_service import WebsiteAnalyzer, build_website_audit
 from app.services.ai_service import AIService, MessageChannel, MessageTone
 from app.services.web_verification_service import verify_establishment_website
 from app.services.google_reviews_service import get_google_reviews_service
@@ -406,6 +406,7 @@ Utilise-les de manière intelligente pour accomplir ta mission."""
             lead.geo_score = analysis.geo_score
             lead.is_mobile_friendly = analysis.is_mobile_friendly
             lead.has_booking_system = analysis.has_booking_system
+            lead.website_audit = build_website_audit(analysis)
             lead.update_score()
             await self.db.commit()
 

@@ -32,7 +32,7 @@ from app.config import get_settings
 from app.models.lead import Lead, LeadStatus
 from app.models.contact import Contact, ContactRole
 from app.services.http_safety import MAX_REDIRECTS, validate_public_http_url
-from app.services.scoring_service import WebsiteAnalyzer
+from app.services.scoring_service import WebsiteAnalyzer, build_website_audit
 from app.services.web_verification_service import WebVerificationService
 
 settings = get_settings()
@@ -933,6 +933,7 @@ class EnrichmentService:
                     lead.geo_score = analysis.geo_score
                     lead.is_mobile_friendly = analysis.is_mobile_friendly
                     lead.has_booking_system = analysis.has_booking_system
+                    lead.website_audit = build_website_audit(analysis)
                     if analysis.booking_platforms:
                         lead.booking_platform = ", ".join(
                             analysis.booking_platforms[:3]

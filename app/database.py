@@ -67,6 +67,7 @@ async def init_db():
             ("bodacc_activite", "TEXT"),
             ("bodacc_publication_date", "DATE"),
             ("rcs_score", "INTEGER"),
+            ("website_audit", "JSON"),
         ]
         for col_name, col_type in new_lead_cols:
             if col_name not in columns:

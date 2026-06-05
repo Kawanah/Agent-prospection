@@ -14,6 +14,7 @@ from sqlalchemy import (
     Date,
     Text,
     Index,
+    JSON,
     Enum as SQLEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -105,6 +106,8 @@ class Lead(Base):
         String(200)
     )  # Ex: "Amenitiz", "D-EDGE, Reservit"
     is_mobile_friendly: Mapped[Optional[bool]] = mapped_column(default=None)
+    # Audit concret du site (responsive, formulaires, avis, carte...) pour l'argumentaire
+    website_audit: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
     seo_score: Mapped[Optional[int]] = mapped_column(Integer)  # 0-100
     geo_score: Mapped[Optional[int]] = mapped_column(
         Integer
