@@ -208,6 +208,7 @@ function QueuePanel({ onToast, onRefreshCampaigns }) {
   if (!stats) return null;
 
   const hasQueue = stats.queued_total > 0;
+  const emailDeliveryEnabled = Boolean(stats.email_delivery_enabled);
 
   return (
     <motion.div {...fadeUp} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -231,10 +232,19 @@ function QueuePanel({ onToast, onRefreshCampaigns }) {
 
       {/* Explication */}
       <p className="text-xs text-primary-400 mb-4">
-        Les messages générés par vos campagnes sont planifiés ici. Cliquez sur{' '}
-        <strong>"Envoyer maintenant"</strong> pour déclencher l'envoi des emails prêts (max 50/jour,
-        60s entre chaque).
+        Les messages générés par vos campagnes sont planifiés ici. En phase développement/test,
+        aucun email réel ne part.
       </p>
+
+      {!emailDeliveryEnabled && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <p>
+            Mode simulation actif : la file peut être préparée, mais le traitement réel des emails
+            est désactivé.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
@@ -291,7 +301,9 @@ function QueuePanel({ onToast, onRefreshCampaigns }) {
 
       <button
         onClick={handleProcess}
-        disabled={processing || !hasQueue || stats.quota_remaining_today === 0}
+        disabled={
+          processing || !hasQueue || stats.quota_remaining_today === 0 || !emailDeliveryEnabled
+        }
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-semibold
                    hover:bg-accent-600 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -299,6 +311,8 @@ function QueuePanel({ onToast, onRefreshCampaigns }) {
           <>
             <Loader2 className="w-4 h-4 animate-spin" /> Envoi en cours…
           </>
+        ) : !emailDeliveryEnabled ? (
+          'Envoi désactivé — mode développement/test'
         ) : stats.quota_remaining_today === 0 ? (
           'Quota journalier atteint — reprise demain'
         ) : !hasQueue ? (
@@ -613,8 +627,7 @@ export default function Campaigns() {
         setActionLoading(null);
       }
     } else {
-      // Afficher le modal de prévisualisation avant de démarrer
-      setPreviewCampaign(campaign);
+      showToast("Démarrage en masse désactivé : ajoutez les leads un par un depuis l'onglet Leads");
     }
   };
 
@@ -877,7 +890,7 @@ export default function Campaigns() {
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
-                      {c.status !== 'completed' && (
+                      {c.status === 'running' && (
                         <button
                           onClick={() => handleToggle(c)}
                           disabled={actionLoading === c.id}
@@ -885,12 +898,18 @@ export default function Campaigns() {
                         >
                           {actionLoading === c.id ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : c.status === 'running' ? (
-                            <Pause className="w-5 h-5" />
                           ) : (
-                            <Play className="w-5 h-5" />
+                            <Pause className="w-5 h-5" />
                           )}
                         </button>
+                      )}
+                      {c.status !== 'running' && c.status !== 'completed' && (
+                        <span
+                          title="Mode test : ajoutez les leads un par un depuis l'onglet Leads"
+                          className="px-2.5 py-1.5 rounded-lg bg-accent-50 text-accent-700 text-xs font-semibold"
+                        >
+                          Un par un
+                        </span>
                       )}
                       {c.status === 'completed' && (
                         <CheckCircle className="w-5 h-5 text-green-400 m-2" />

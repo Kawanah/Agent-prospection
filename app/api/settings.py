@@ -97,6 +97,8 @@ class SettingsResponse(BaseModel):
     smtp_user: str
     email_from: str
     smtp_configured: bool
+    email_delivery_enabled: bool
+    auto_queue_enabled: bool
     # LinkedIn
     linkedin_email: str
 
@@ -142,6 +144,8 @@ async def get_settings_view():
         smtp_user=env.get("SMTP_USER", ""),
         email_from=env.get("EMAIL_FROM", ""),
         smtp_configured=bool(env.get("SMTP_USER") and env.get("SMTP_PASSWORD")),
+        email_delivery_enabled=get_settings().enable_email_delivery,
+        auto_queue_enabled=get_settings().enable_auto_queue,
         linkedin_email=env.get("LINKEDIN_EMAIL", ""),
     )
 
@@ -203,6 +207,13 @@ async def send_test_email(data: TestEmailRequest):
     get_settings.cache_clear()
     service = EmailService()
 
+    if not get_settings().enable_email_delivery:
+        return {
+            "success": True,
+            "dry_run": True,
+            "message": f"Simulation OK : aucun email réel envoyé à {data.to_email}",
+        }
+
     if not service.is_configured():
         raise HTTPException(
             status_code=400,
@@ -219,6 +230,13 @@ async def send_test_email(data: TestEmailRequest):
             "— Agent Kawanah Tourisme"
         ),
     )
+
+    if result.dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "message": f"Simulation OK : aucun email réel envoyé à {data.to_email}",
+        }
 
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)

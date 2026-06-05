@@ -59,9 +59,11 @@ class Settings(BaseSettings):
     # Garde-fous d'administration
     enable_runtime_settings: bool = False
     enable_admin_purge: bool = False
+    enable_email_delivery: bool = False
+    enable_auto_queue: bool = False
 
     # Prise de rendez-vous
-    booking_link: str = "https://app.lemcal.com/@kawanah/travel"
+    booking_link: str = "https://app.lemcal.com/@kawanah/presentation"
 
     # Authentication JWT
     secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"

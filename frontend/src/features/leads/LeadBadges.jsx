@@ -62,7 +62,7 @@ export function ScoreBadge({ score, lead }) {
       </div>
 
       {lead && (
-        <div className="flex flex-col gap-1 min-w-0">
+        <div className="hidden 2xl:flex flex-col gap-1 min-w-0">
           {lead.has_website === false ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-red-500 font-semibold leading-tight">
               🚫 Sans site

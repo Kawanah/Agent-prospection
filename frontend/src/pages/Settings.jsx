@@ -90,8 +90,15 @@ function TestEmailButton() {
     setSending(true);
     setResult(null);
     try {
-      await settingsApi.sendTestEmail(testEmail);
-      setResult({ ok: true, msg: `Email de test envoyé à ${testEmail}` });
+      const res = await settingsApi.sendTestEmail(testEmail);
+      setResult({
+        ok: true,
+        msg:
+          res.data?.message ||
+          (res.data?.dry_run
+            ? `Simulation OK : aucun email réel envoyé à ${testEmail}`
+            : `Email de test envoyé à ${testEmail}`),
+      });
     } catch (err) {
       setResult({ ok: false, msg: err.response?.data?.detail || "Erreur lors de l'envoi" });
     } finally {
@@ -120,7 +127,7 @@ function TestEmailButton() {
                      disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
         >
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          Tester
+          Simuler
         </button>
       </div>
       {result && (

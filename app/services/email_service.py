@@ -38,6 +38,7 @@ class EmailResult:
     to_email: str
     subject: str
     error: Optional[str] = None
+    dry_run: bool = False
 
 
 class EmailService:
@@ -73,12 +74,33 @@ class EmailService:
         """
         Envoie un email.
 
-        SÉCURITÉ : En mode development, les envois sont bloqués sauf si
-        force_send=True ou si l'objet contient [TEST].
+        SÉCURITÉ : les envois réels sont bloqués tant que
+        ENABLE_EMAIL_DELIVERY=false. Le mode dev/test ne contacte jamais SMTP.
         """
-        # Garde-fou : bloquer l'envoi réel en mode dev
-        is_test_email = "[TEST]" in (subject or "")
-        if settings.app_env != "production" and not force_send and not is_test_email:
+        if not settings.enable_email_delivery:
+            try:
+                to_email = _validate_email(to_email)
+            except ValueError as exc:
+                return EmailResult(
+                    success=False,
+                    to_email=to_email,
+                    subject=subject,
+                    error=str(exc),
+                    dry_run=True,
+                )
+            logger.warning(
+                f"⚠️ ENVOI SIMULÉ (mode {settings.app_env}, ENABLE_EMAIL_DELIVERY=false) - "
+                f"Destinataire: {to_email}, Objet: {subject}"
+            )
+            return EmailResult(
+                success=False,
+                to_email=to_email,
+                subject=subject,
+                error="Envoi réel désactivé : simulation développement/test.",
+                dry_run=True,
+            )
+
+        if settings.app_env != "production" and not force_send:
             logger.warning(
                 f"⚠️ ENVOI BLOQUÉ (mode {settings.app_env}) - "
                 f"Destinataire: {to_email}, Objet: {subject}"
@@ -87,8 +109,7 @@ class EmailService:
                 success=False,
                 to_email=to_email,
                 subject=subject,
-                error=f"Envoi bloqué en mode {settings.app_env}. "
-                f"Passez APP_ENV=production ou utilisez force_send.",
+                error=f"Envoi bloqué en mode {settings.app_env}. Passez APP_ENV=production.",
             )
 
         if not self.is_configured():
@@ -179,7 +200,7 @@ class EmailService:
 
 def _linkify(text: str) -> str:
     """Convertit les URLs en liens cliquables dans un texte HTML déjà échappé."""
-    # Détecte les URLs (http/https et les domaines nus type travel.kawanah.com)
+    # Détecte les URLs (http/https et les domaines nus type tourisme.kawanah.com)
     url_pattern = re.compile(
         r'(https?://[^\s<>"]+|(?<!\w)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s<>"]*)?)'
     )
@@ -202,20 +223,18 @@ def send_prospection_email(
     Envoie un email de prospection.
     Helper function pour l'API.
 
-    SÉCURITÉ : En mode development (APP_ENV != 'production'), les emails ne partent PAS
-    sauf si force_send=True est explicitement passé via l'API.
+    SÉCURITÉ : les emails ne partent pas tant que ENABLE_EMAIL_DELIVERY=false.
     """
-    # Garde-fou : bloquer l'envoi réel en dev sauf demande explicite
-    if settings.app_env != "production" and not force_send:
+    if not settings.enable_email_delivery:
         logger.warning(
-            f"⚠️ ENVOI BLOQUÉ (mode {settings.app_env}) - Destinataire: {to_email}, Objet: {subject}. "
-            f"Passez force_send=true pour envoyer réellement."
+            f"⚠️ ENVOI SIMULÉ (ENABLE_EMAIL_DELIVERY=false) - Destinataire: {to_email}, Objet: {subject}."
         )
         return EmailResult(
             success=False,
             to_email=to_email,
             subject=subject,
-            error=f"Envoi bloqué en mode {settings.app_env}. Passez en production ou utilisez force_send=true pour confirmer.",
+            error="Envoi réel désactivé : simulation développement/test.",
+            dry_run=True,
         )
 
     service = EmailService()

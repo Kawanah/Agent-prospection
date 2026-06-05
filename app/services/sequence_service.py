@@ -25,6 +25,7 @@ from app.models.message import (
 )
 from app.services.ai_service import AIService, MessageChannel as AIChannel, MessageTone
 from app.services.email_service import EmailService
+from app.config import get_settings
 
 # ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -108,11 +109,11 @@ class SequenceService:
                     lead_id=lead.id,
                     channel=MessageChannel(ai_channel.value),
                     direction=MessageDirection.OUTBOUND,
-                    status=MessageStatus.QUEUED,
+                    status=MessageStatus.DRAFT,
                     subject=generated.subject,
                     body=generated.body,
                     sequence_number=1,
-                    scheduled_at=scheduled_at,
+                    scheduled_at=None,
                 )
                 db.add(message)
                 queued_count += 1
@@ -181,11 +182,11 @@ class SequenceService:
                     lead_id=lead.id,
                     channel=MessageChannel(ai_channel.value),
                     direction=MessageDirection.OUTBOUND,
-                    status=MessageStatus.QUEUED,
+                    status=MessageStatus.DRAFT,
                     subject=generated.subject,
                     body=generated.body,
                     sequence_number=1,
-                    scheduled_at=scheduled_at,
+                    scheduled_at=None,
                 )
                 db.add(message)
                 queued_count += 1
@@ -212,6 +213,17 @@ class SequenceService:
         - Programme la relance si configurée
         - Retourne un résumé de ce qui a été traité
         """
+        current_settings = get_settings()
+        if not current_settings.enable_email_delivery:
+            return {
+                "sent": 0,
+                "failed": 0,
+                "skipped": 0,
+                "quota_reached": False,
+                "dry_run": True,
+                "message": "Envoi réel désactivé : file non traitée en mode développement/test.",
+            }
+
         now = datetime.utcnow()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -452,4 +464,5 @@ class SequenceService:
             "quota_remaining_today": max(0, MAX_EMAILS_PER_DAY - sent_today_val),
             "quota_limit": MAX_EMAILS_PER_DAY,
             "failed_total": failed.scalar() or 0,
+            "email_delivery_enabled": get_settings().enable_email_delivery,
         }

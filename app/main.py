@@ -58,14 +58,21 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Base de données initialisée.")
 
-    # Lancer le scheduler d'envoi en arrière-plan
-    queue_task = asyncio.create_task(_auto_process_queue())
-    logger.info(f"Scheduler d'envoi démarré (intervalle : {QUEUE_INTERVAL_SECONDS}s)")
+    # Lancer le scheduler d'envoi uniquement après opt-in explicite.
+    queue_task = None
+    if settings.enable_auto_queue and settings.enable_email_delivery:
+        queue_task = asyncio.create_task(_auto_process_queue())
+        logger.info(
+            f"Scheduler d'envoi démarré (intervalle : {QUEUE_INTERVAL_SECONDS}s)"
+        )
+    else:
+        logger.info("Scheduler d'envoi désactivé : mode développement/test")
 
     yield
 
     # Shutdown
-    queue_task.cancel()
+    if queue_task:
+        queue_task.cancel()
     logger.info("Arrêt de l'application...")
 
 

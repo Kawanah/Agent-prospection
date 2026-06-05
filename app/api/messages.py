@@ -26,6 +26,7 @@ from app.models.message import (
 from app.models.lead import Lead
 from app.models.contact import Contact
 from app.services.email_service import EmailService
+from app.config import get_settings
 from app.models.campaign import Campaign
 from app.schemas.message import (
     MessageCreate,
@@ -345,6 +346,14 @@ async def send_message_test(
     if not message.body:
         raise HTTPException(status_code=400, detail="Ce message n'a pas de corps")
 
+    current_settings = get_settings()
+    if not current_settings.enable_email_delivery:
+        return {
+            "success": True,
+            "dry_run": True,
+            "message": f"Simulation OK : aucun email réel envoyé à {data.to_email}",
+        }
+
     service = EmailService()
     if not service.is_configured():
         raise HTTPException(
@@ -358,6 +367,13 @@ async def send_message_test(
     email_result = service.send_email(
         to_email=data.to_email, subject=subject, body=body
     )
+
+    if email_result.dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "message": f"Simulation OK : aucun email réel envoyé à {data.to_email}",
+        }
 
     if not email_result.success:
         raise HTTPException(status_code=500, detail=email_result.error)

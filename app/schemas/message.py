@@ -51,6 +51,7 @@ class MessageResponse(BaseModel):
     status: MessageStatus
     subject: Optional[str]
     body: str
+    body_html: Optional[str]
     sequence_number: int
     sentiment: SentimentType
     sentiment_score: Optional[float]

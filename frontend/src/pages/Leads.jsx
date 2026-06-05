@@ -1423,7 +1423,7 @@ export default function Leads() {
       </AnimatePresence>
 
       {/* Tableau */}
-      <motion.div {...fadeUp} className="card overflow-hidden overflow-x-auto">
+      <motion.div {...fadeUp} className="card overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="w-8 h-8 text-accent-500 animate-spin" />
@@ -1439,287 +1439,295 @@ export default function Leads() {
             </p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-primary-50 border-b border-primary-100">
-              <tr>
-                <th className="px-4 py-3 w-8" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
-                  />
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
-                  Établissement
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden md:table-cell">
-                  Type
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
-                  Qualification
-                </th>
-                <th
-                  className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 cursor-pointer hover:text-accent-600 select-none"
-                  onClick={() => {
-                    setSortBy('score');
-                    setSortOrder(sortBy === 'score' && sortOrder === 'desc' ? 'asc' : 'desc');
-                    setPage(1);
-                  }}
-                  title="Cliquer pour trier"
-                >
-                  Potentiel {sortBy === 'score' ? (sortOrder === 'desc' ? '↓' : '↑') : '↕'}
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden lg:table-cell">
-                  Contact
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3 hidden lg:table-cell">
-                  Site web
-                </th>
-                <th className="text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-5 py-3">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-primary-50">
-              {filteredLeads.map((lead) => {
-                const q = getQualification(lead);
-                const camp = campaignMap[String(lead.id)];
-                return (
-                  <>
-                    <tr
-                      key={lead.id}
-                      onClick={() => setDetailLead(lead)}
-                      className={`transition-colors group cursor-pointer ${
-                        lead.is_nouvelle_entreprise
-                          ? selectedIds.has(lead.id)
-                            ? 'bg-emerald-100'
-                            : 'bg-emerald-50/60 hover:bg-emerald-50'
-                          : selectedIds.has(lead.id)
-                            ? 'bg-accent-50'
-                            : 'hover:bg-primary-50/40'
-                      }`}
-                      style={
-                        lead.is_nouvelle_entreprise ? { boxShadow: 'inset 3px 0 0 #10b981' } : {}
+          <div className="w-full overflow-hidden">
+            <table className="w-full table-fixed">
+              <thead className="bg-primary-50 border-b border-primary-100">
+                <tr>
+                  <th className="w-9 px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredLeads.length > 0 && selectedIds.size === filteredLeads.length
                       }
-                    >
-                      {/* Checkbox */}
-                      <td className="px-4 py-3.5 w-8" onClick={(e) => toggleSelect(lead.id, e)}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(lead.id)}
-                          onChange={() => {}}
-                          className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Établissement */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex-shrink-0">
-                            <div
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border ${
-                                lead.is_nouvelle_entreprise
-                                  ? 'bg-emerald-100 border-emerald-200'
-                                  : `${q.bg} ${q.border}`
-                              }`}
-                            >
-                              <span>
-                                {lead.is_nouvelle_entreprise
-                                  ? '🆕'
-                                  : TYPE_EMOJI[lead.lead_type] || '🏠'}
-                              </span>
-                            </div>
-                            {lead.enriched_at && (
-                              <span
-                                className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"
-                                title="Enrichi"
-                              />
-                            )}
-                            {lead.notes && (
-                              <span
-                                className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center"
-                                title={lead.notes}
-                              >
-                                <span className="text-[7px] leading-none">📝</span>
-                              </span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p
-                                className={`font-medium text-sm truncate max-w-[200px] ${lead.is_nouvelle_entreprise ? 'text-emerald-900' : 'text-primary-900'}`}
-                              >
-                                {lead.name}
-                              </p>
-                              {lead.is_nouvelle_entreprise && lead.forme_juridique && (
-                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md border border-emerald-200 whitespace-nowrap">
-                                  {lead.forme_juridique}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-primary-400 truncate">
-                              {lead.city}
-                              {lead.postal_code ? ` · ${lead.postal_code}` : ''}
-                              {lead.is_nouvelle_entreprise && lead.capital != null && (
-                                <span className="ml-1.5 text-emerald-600 font-medium">
-                                  · {lead.capital.toLocaleString('fr-FR')} € capital
-                                </span>
-                              )}
-                              {!lead.is_nouvelle_entreprise && lead.status === 'enriched' && (
-                                <span className="ml-1.5 text-green-600 font-medium">· enrichi</span>
-                              )}
-                            </p>
-                            {lead.is_nouvelle_entreprise && lead.objet_social && (
-                              <p className="text-[11px] text-emerald-700/80 truncate max-w-[240px] mt-0.5 italic">
-                                {lead.objet_social.slice(0, 60)}
-                                {lead.objet_social.length > 60 ? '…' : ''}
-                              </p>
-                            )}
-                            {camp && (
-                              <p className="text-[10px] mt-0.5 truncate max-w-[200px]">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium ${
-                                    camp.message_status === 'SENT' ||
-                                    camp.message_status === 'DELIVERED'
-                                      ? 'bg-blue-50 text-blue-600'
-                                      : camp.message_status === 'QUEUED'
-                                        ? 'bg-amber-50 text-amber-600'
-                                        : 'bg-primary-50 text-primary-500'
-                                  }`}
-                                >
-                                  {camp.message_status === 'SENT' ||
-                                  camp.message_status === 'DELIVERED'
-                                    ? '📨'
-                                    : camp.message_status === 'QUEUED'
-                                      ? '⏳'
-                                      : '📋'}
-                                  {camp.campaign_name}
-                                </span>
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Type */}
-                      <td className="px-5 py-3.5 hidden md:table-cell">
-                        <div className="flex flex-col gap-1">
-                          {lead.is_nouvelle_entreprise ? (
-                            <span className="text-xs text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg font-semibold">
-                              🆕 Nlle Entreprise
-                            </span>
-                          ) : (
-                            <span className="text-xs text-primary-500 bg-primary-50 px-2 py-1 rounded-lg">
-                              {TYPE_LABELS[lead.lead_type] || lead.lead_type}
-                              {lead.star_rating &&
-                                ` · ${lead.star_rating.replace(' étoiles', '★')}`}
-                            </span>
-                          )}
-                          {lead.is_nouvelle_entreprise && (
-                            <span className="text-[10px] text-primary-400">
-                              {TYPE_LABELS[lead.lead_type] || lead.lead_type}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Qualification */}
-                      <td className="px-5 py-3.5">
-                        <QualifBadge lead={lead} />
-                      </td>
-
-                      {/* Score / Potentiel */}
-                      <td className="px-5 py-3.5">
-                        <ScoreBadge score={lead.score} lead={lead} />
-                      </td>
-
-                      {/* Contact */}
-                      <td className="px-5 py-3.5 hidden lg:table-cell">
-                        <div className="flex flex-col gap-0.5">
-                          {lead.email ? (
-                            <span className="flex items-center gap-1 text-xs text-success-600">
-                              <Mail className="w-3 h-3" />
-                              <span className="truncate max-w-[120px]">{lead.email}</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-primary-300">— email</span>
-                          )}
-                          {lead.phone && (
-                            <span className="flex items-center gap-1 text-xs text-primary-500">
-                              <Phone className="w-3 h-3" />
-                              {lead.phone}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Site web */}
-                      <td className="px-5 py-3.5 hidden lg:table-cell">
-                        {lead.website && !['', '-'].includes(lead.website) ? (
-                          <a
-                            href={lead.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700"
-                          >
-                            <Globe className="w-3 h-3" />
-                            <span className="truncate max-w-[100px]">
-                              {lead.website.replace(/^https?:\/\//, '')}
-                            </span>
-                            <ExternalLink className="w-2.5 h-2.5 opacity-50" />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-red-400 font-medium">Pas de site</span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td
-                        className="px-5 py-3.5 whitespace-nowrap"
-                        onClick={(e) => e.stopPropagation()}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="w-[26%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-3 py-3">
+                    Établissement
+                  </th>
+                  <th className="w-[10%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3 hidden xl:table-cell">
+                    Type
+                  </th>
+                  <th className="w-[14%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3">
+                    Qualification
+                  </th>
+                  <th
+                    className="w-[10%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3 cursor-pointer hover:text-accent-600 select-none"
+                    onClick={() => {
+                      setSortBy('score');
+                      setSortOrder(sortBy === 'score' && sortOrder === 'desc' ? 'asc' : 'desc');
+                      setPage(1);
+                    }}
+                    title="Cliquer pour trier"
+                  >
+                    Potentiel {sortBy === 'score' ? (sortOrder === 'desc' ? '↓' : '↑') : '↕'}
+                  </th>
+                  <th className="w-[18%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3 hidden 2xl:table-cell">
+                    Contact
+                  </th>
+                  <th className="w-[15%] text-left text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3 hidden 2xl:table-cell">
+                    Site web
+                  </th>
+                  <th className="w-[96px] text-center text-xs font-semibold text-primary-500 uppercase tracking-wider px-2 py-3 bg-primary-50">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-primary-50">
+                {filteredLeads.map((lead) => {
+                  const q = getQualification(lead);
+                  const camp = campaignMap[String(lead.id)];
+                  return (
+                    <>
+                      <tr
+                        key={lead.id}
+                        onClick={() => setDetailLead(lead)}
+                        className={`transition-colors group cursor-pointer ${
+                          lead.is_nouvelle_entreprise
+                            ? selectedIds.has(lead.id)
+                              ? 'bg-emerald-100'
+                              : 'bg-emerald-50/60 hover:bg-emerald-50'
+                            : selectedIds.has(lead.id)
+                              ? 'bg-accent-50'
+                              : 'hover:bg-primary-50/40'
+                        }`}
+                        style={
+                          lead.is_nouvelle_entreprise ? { boxShadow: 'inset 3px 0 0 #10b981' } : {}
+                        }
                       >
-                        <div className="flex items-center gap-1.5">
-                          {!lead.enriched_at ? (
-                            <button
-                              onClick={() => handleEnrichOne(lead.id, lead.name)}
-                              disabled={enrichingId === lead.id}
-                              title="Enrichir ce lead"
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                        {/* Checkbox */}
+                        <td className="w-9 px-2 py-3.5" onClick={(e) => toggleSelect(lead.id, e)}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(lead.id)}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded accent-accent-500 cursor-pointer"
+                          />
+                        </td>
+
+                        {/* Établissement */}
+                        <td className="px-3 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border ${
+                                  lead.is_nouvelle_entreprise
+                                    ? 'bg-emerald-100 border-emerald-200'
+                                    : `${q.bg} ${q.border}`
+                                }`}
+                              >
+                                <span>
+                                  {lead.is_nouvelle_entreprise
+                                    ? '🆕'
+                                    : TYPE_EMOJI[lead.lead_type] || '🏠'}
+                                </span>
+                              </div>
+                              {lead.enriched_at && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"
+                                  title="Enrichi"
+                                />
+                              )}
+                              {lead.notes && (
+                                <span
+                                  className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center"
+                                  title={lead.notes}
+                                >
+                                  <span className="text-[7px] leading-none">📝</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p
+                                  className={`font-medium text-sm truncate max-w-[130px] xl:max-w-[170px] 2xl:max-w-[210px] ${lead.is_nouvelle_entreprise ? 'text-emerald-900' : 'text-primary-900'}`}
+                                >
+                                  {lead.name}
+                                </p>
+                                {lead.is_nouvelle_entreprise && lead.forme_juridique && (
+                                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md border border-emerald-200 whitespace-nowrap">
+                                    {lead.forme_juridique}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-primary-400 truncate">
+                                {lead.city}
+                                {lead.postal_code ? ` · ${lead.postal_code}` : ''}
+                                {lead.is_nouvelle_entreprise && lead.capital != null && (
+                                  <span className="ml-1.5 text-emerald-600 font-medium">
+                                    · {lead.capital.toLocaleString('fr-FR')} € capital
+                                  </span>
+                                )}
+                                {!lead.is_nouvelle_entreprise && lead.status === 'enriched' && (
+                                  <span className="ml-1.5 text-green-600 font-medium">
+                                    · enrichi
+                                  </span>
+                                )}
+                              </p>
+                              {lead.is_nouvelle_entreprise && lead.objet_social && (
+                                <p className="text-[11px] text-emerald-700/80 truncate max-w-[240px] mt-0.5 italic">
+                                  {lead.objet_social.slice(0, 60)}
+                                  {lead.objet_social.length > 60 ? '…' : ''}
+                                </p>
+                              )}
+                              {camp && (
+                                <p className="text-[10px] mt-0.5 truncate max-w-[200px]">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium ${
+                                      camp.message_status === 'sent' ||
+                                      camp.message_status === 'delivered'
+                                        ? 'bg-blue-50 text-blue-600'
+                                        : camp.message_status === 'queued'
+                                          ? 'bg-amber-50 text-amber-600'
+                                          : 'bg-primary-50 text-primary-500'
+                                    }`}
+                                  >
+                                    {camp.message_status === 'sent' ||
+                                    camp.message_status === 'delivered'
+                                      ? '📨'
+                                      : camp.message_status === 'queued'
+                                        ? '⏳'
+                                        : '📋'}
+                                    {camp.campaign_name}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Type */}
+                        <td className="px-2 py-3.5 hidden xl:table-cell">
+                          <div className="flex flex-col gap-1">
+                            {lead.is_nouvelle_entreprise ? (
+                              <span className="text-xs text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg font-semibold">
+                                🆕 Nlle Entreprise
+                              </span>
+                            ) : (
+                              <span className="text-xs text-primary-500 bg-primary-50 px-2 py-1 rounded-lg">
+                                {TYPE_LABELS[lead.lead_type] || lead.lead_type}
+                                {lead.star_rating &&
+                                  ` · ${lead.star_rating.replace(' étoiles', '★')}`}
+                              </span>
+                            )}
+                            {lead.is_nouvelle_entreprise && (
+                              <span className="text-[10px] text-primary-400">
+                                {TYPE_LABELS[lead.lead_type] || lead.lead_type}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Qualification */}
+                        <td className="px-2 py-3.5">
+                          <QualifBadge lead={lead} />
+                        </td>
+
+                        {/* Score / Potentiel */}
+                        <td className="px-2 py-3.5">
+                          <ScoreBadge score={lead.score} lead={lead} />
+                        </td>
+
+                        {/* Contact */}
+                        <td className="px-2 py-3.5 hidden 2xl:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            {lead.email ? (
+                              <span className="flex items-center gap-1 text-xs text-success-600">
+                                <Mail className="w-3 h-3" />
+                                <span className="truncate max-w-[95px] xl:max-w-[130px]">
+                                  {lead.email}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-primary-300">— email</span>
+                            )}
+                            {lead.phone && (
+                              <span className="flex items-center gap-1 text-xs text-primary-500">
+                                <Phone className="w-3 h-3" />
+                                {lead.phone}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Site web */}
+                        <td className="px-2 py-3.5 hidden 2xl:table-cell">
+                          {lead.website && !['', '-'].includes(lead.website) ? (
+                            <a
+                              href={lead.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-accent-600 hover:text-accent-700"
+                            >
+                              <Globe className="w-3 h-3" />
+                              <span className="truncate max-w-[80px] xl:max-w-[110px]">
+                                {lead.website.replace(/^https?:\/\//, '')}
+                              </span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-red-400 font-medium">Pas de site</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td
+                          className="w-[96px] px-2 py-3.5 whitespace-nowrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            {!lead.enriched_at ? (
+                              <button
+                                onClick={() => handleEnrichOne(lead.id, lead.name)}
+                                disabled={enrichingId === lead.id}
+                                title="Enrichir ce lead"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium
                               bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100
                               disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {enrichingId === lead.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
+                              >
+                                {enrichingId === lead.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="w-3 h-3" />
+                                )}
+                              </button>
+                            ) : (
+                              <span
+                                title="Lead enrichi"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium bg-green-50 text-green-600 border border-green-200"
+                              >
                                 <Sparkles className="w-3 h-3" />
-                              )}
-                              Enrichir
-                            </button>
-                          ) : (
-                            <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-600 border border-green-200">
-                              <Sparkles className="w-3 h-3" />
-                              Enrichi
-                            </span>
-                          )}
-                          <button
-                            onClick={() => setCampaignLead(lead)}
-                            title="Envoyer en campagne"
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setCampaignLead(lead)}
+                              title="Envoyer en campagne"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium
                             bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100
                             transition-colors"
-                          >
-                            <Send className="w-3 h-3" />
-                            Campagne
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                            >
+                              <Send className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Pagination */}

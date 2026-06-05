@@ -58,11 +58,12 @@ async def list_campaigns(
     result = await db.execute(query)
     campaigns = result.scalars().all()
 
-    # Compter les messages QUEUED par campagne
+    # Compter les messages de travail par campagne.
+    # En phase dev/test, les campagnes produisent des brouillons à revoir un par un.
     queued_counts_result = await db.execute(
         select(Message.campaign_id, func.count(Message.id))
         .where(
-            Message.status == MessageStatus.QUEUED,
+            Message.status.in_((MessageStatus.DRAFT, MessageStatus.QUEUED)),
             Message.direction == MessageDirection.OUTBOUND,
         )
         .group_by(Message.campaign_id)
@@ -278,35 +279,19 @@ async def start_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Démarre une campagne : génère et planifie les messages pour tous les leads éligibles.
+    Démarre une campagne.
+
+    Mode développement/test : le démarrage en masse est volontairement désactivé.
+    Les leads doivent être ajoutés un par un depuis l'onglet Leads pour travailler
+    chaque message manuellement avant copie.
     """
-    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
-    campaign = result.scalar_one_or_none()
-
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campagne non trouvée")
-
-    if campaign.status not in (CampaignStatus.DRAFT, CampaignStatus.PAUSED):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Impossible de démarrer une campagne en statut {campaign.status.value}",
-        )
-
-    campaign.status = CampaignStatus.RUNNING
-    campaign.started_at = campaign.started_at or datetime.utcnow()
-    await db.commit()
-
-    # Générer et planifier les messages
-    launch_result = await sequence_service.launch_campaign(campaign, db, limit=limit)
-
-    logger.info(
-        f"Campagne {campaign.name} démarrée — {launch_result['queued']} messages planifiés"
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Démarrage en masse désactivé en phase test. "
+            "Ajoutez les leads un par un depuis l'onglet Leads."
+        ),
     )
-    return {
-        "message": f"Campagne {campaign.name} démarrée",
-        "status": "running",
-        **launch_result,
-    }
 
 
 @router.post("/{campaign_id}/pause")
@@ -359,14 +344,20 @@ async def remove_lead_from_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Retire un lead d'une campagne : supprime tous ses messages QUEUED.
-    Les messages déjà envoyés ne sont pas touchés.
+    Retire un lead d'une campagne : supprime ses messages annulables.
+    En phase dev/test, les messages sont des brouillons, pas des envois réels.
     """
+    removable_statuses = (
+        MessageStatus.DRAFT,
+        MessageStatus.QUEUED,
+        MessageStatus.CANCELLED,
+        MessageStatus.FAILED,
+    )
     result = await db.execute(
         select(Message).where(
             Message.campaign_id == campaign_id,
             Message.lead_id == lead_id,
-            Message.status == MessageStatus.QUEUED,
+            Message.status.in_(removable_statuses),
         )
     )
     messages = result.scalars().all()
@@ -374,7 +365,7 @@ async def remove_lead_from_campaign(
     if not messages:
         raise HTTPException(
             status_code=404,
-            detail="Aucun message annulable pour ce lead (déjà envoyé ou inexistant)",
+            detail="Aucun brouillon annulable pour ce lead",
         )
 
     count = len(messages)
@@ -405,7 +396,18 @@ async def delete_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
             detail="Impossible de supprimer une campagne en cours. Arrêtez-la d'abord.",
         )
 
+    messages_result = await db.execute(
+        select(Message).where(Message.campaign_id == campaign_id)
+    )
+    messages = messages_result.scalars().all()
+
+    for message in messages:
+        await db.delete(message)
+
     await db.delete(campaign)
     await db.commit()
 
-    return {"message": f"Campagne {campaign_id} supprimée"}
+    return {
+        "message": f"Campagne {campaign_id} supprimée",
+        "messages_deleted": len(messages),
+    }

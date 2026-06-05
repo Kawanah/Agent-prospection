@@ -62,6 +62,7 @@ class MessageResponse(BaseModel):
 
     lead_id: int
     lead_name: str
+    lead_website: Optional[str]
     lead_segment: str
     subject: str
     body: str
@@ -115,6 +116,7 @@ async def generate_message(
     return MessageResponse(
         lead_id=lead.id,
         lead_name=lead.name,
+        lead_website=lead.website,
         lead_segment=lead.priority_level,
         subject=message.subject,
         body=message.body,
