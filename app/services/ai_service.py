@@ -77,27 +77,25 @@ montrer ce que ça coûte en clients ou en réservations, puis ce que Kawanah me
     STYLE_RULES = """
 RÈGLES DE STYLE ABSOLUES (à respecter impérativement) :
 - Tu écris un BROUILLON de prospection que Laetitia relira avant envoi
-- Voix de Laetitia : experte web hospitalité, ton concret, sûr d'elle, qui donne envie de répondre. Vendeur mais crédible, jamais agressif ni racoleur
-- Structure obligatoire du corps :
+- Voix de Laetitia : experte web hospitalité, ton chaleureux, valorisant et convaincant. On donne envie, on ne fait jamais la leçon
+- Méthode AIDA en version DOUCE (Attention, Intérêt, Désir, Action) :
   1. Bonjour,
-  2. Tu as regardé leur site : nomme 2 ou 3 constats concrets de l'audit (ex : pas responsive, pas de réservation en direct, pas d'avis affichés, pas de carte)
-  3. L'enjeu business en une phrase : ce que ces manques coûtent (clients qui passent à côté, réservations qui partent chez des intermédiaires)
-  4. Ce que Kawanah apporte en face, avec le différenciateur : site responsive et moderne, réservation directe, avis et carte, et SURTOUT un socle SEO et IA natif (visible sur Google ET sur les moteurs IA)
-  5. Une proposition concrète et courte (ex : je vous montre en 15 min ce que ça donnerait pour [nom])
-  6. La phrase de rendez-vous exacte, puis formule de politesse et signature
+  2. ATTENTION : "J'ai découvert votre site : [URL]" puis un compliment sincère sur l'établissement et ce qu'il propose. Enchaîner : "votre présence en ligne ne reflète pas encore pleinement la qualité de l'expérience que vous offrez"
+  3. INTÉRÊT : rappeler que la plupart des visiteurs découvrent un établissement depuis leur smartphone, puis présenter 2 ou 3 constats de l'audit comme un POTENTIEL à révéler, jamais comme un défaut (ex : "votre site n'est pas encore optimisé pour les mobiles", "son design gagnerait à être rafraîchi"). Tournures douces : "pas encore", "gagnerait à", "mérite"
+  4. DÉSIR : "Imaginez un site qui permette à vos visiteurs de..." puis les bénéfices concrets (réserver en quelques clics, trouver les infos pratiques, lire les avis qui rassurent, découvrir un univers moderne)
+  5. Le différenciateur Kawanah : sites modernes et responsives, avec un socle SEO et IA natif (visibles sur Google ET sur les moteurs IA type ChatGPT). Objectif : transformer plus de visiteurs en clients
+  6. ACTION : proposition courte ("je peux vous montrer en 15 minutes à quoi pourrait ressembler une nouvelle version du site de [nom]"), puis la phrase de rendez-vous exacte, formule de politesse et signature
 - TOUJOURS commencer par "Bonjour," sur une ligne seule
-- TOUJOURS citer l'URL du site dans la première observation si un site existe
+- TOUJOURS citer l'URL du site juste après "J'ai découvert votre site :"
 - TOUJOURS s'appuyer sur les constats réels de l'AUDIT CONCRET fourni. Ne rien inventer qui n'y figure pas
-- Tu PEUX promettre un bénéfice concret et utiliser un vocabulaire commercial mesuré (visibilité, réservations directes, plus de clients). C'est un message qui vend
+- Convaincre par la valorisation et le bénéfice, jamais par la peur ou le reproche
+- INTERDICTION de dénigrer ou de mettre le prospect à l'index : on ne dit jamais que son site est "mauvais", "nul", "dépassé", "à la traîne". On parle de potentiel, de mise à niveau, d'opportunité
 - JAMAIS de guillemets « » ou " " dans le message
 - INTERDICTION ABSOLUE du tiret long (em dash). Ne jamais l'utiliser. Virgule, point ou reformulation à la place
-- JAMAIS de liste à puces ni de tirets dans le corps : que des phrases
 - JAMAIS "Je me permets de vous contacter"
-- JAMAIS de présentation de l'agence en bloc (les arguments s'intègrent dans les phrases, la signature suffit pour le reste)
 - JAMAIS nommer une plateforme tierce (Booking, Airbnb...) : dire "un intermédiaire" / "une plateforme tierce"
 - JAMAIS de chiffre en euros ou en pourcentage (pas de commission chiffrée)
-- Ton affirmé mais respectueux : pas d'insulte ni de mépris sur leur site actuel. On constate, on ne juge pas la personne
-- Le corps fait 6 à 9 lignes maximum hors signature. Dense et utile, pas un pavé
+- Le corps fait 8 à 12 lignes maximum hors signature. Convaincant mais pas un pavé
 - Avant la formule de politesse, TOUJOURS cette phrase exacte sur sa propre ligne : "On peut prendre un rendez-vous pour en parler : " suivie du lien de rendez-vous
 - Terminer par une formule de politesse courte (ex : "Belle journée,") puis la signature
 - Signature : Laetitia pour Kawanah Tourisme\nhttps://tourisme.kawanah.com/
@@ -824,46 +822,60 @@ https://tourisme.kawanah.com/"""
         findings: list,
     ) -> GeneratedMessage:
         """
-        Message vendeur construit à partir de l'audit concret du site.
-        Nomme les manques réels, montre l'enjeu, puis ce que Kawanah apporte (avec USP SEO & IA natif).
+        Message persuasif (AIDA en version douce) construit à partir de l'audit du site.
+        On valorise l'établissement, on présente les manques comme un potentiel à révéler,
+        jamais comme un défaut. USP : socle SEO & IA natif.
         """
-        # Constats concrets (2 à 3, directement issus de l'audit)
-        constats = " ; ".join(findings[:3])
+        lead_type_val = lead.lead_type.value if lead.lead_type else "other"
 
-        # Ce que Kawanah met en face, mappé sur les manques réels
-        solutions: list[str] = []
+        # Attention : compliment valorisant adapté au type
+        compliment = {
+            "activite": "propose une activité qui attire naturellement les familles et les groupes",
+            "camping": "offre un cadre qui plaît aux familles comme aux amoureux du plein air",
+            "hotel": "propose une expérience qui séduit voyageurs et clients de passage",
+            "gite": "offre un accueil authentique qui marque les voyageurs",
+            "chambre_hotes": "offre un accueil chaleureux qui fidélise les voyageurs",
+        }.get(lead_type_val, "propose une expérience qui mérite d'être mise en valeur")
+
+        # Intérêt : constats présentés en douceur (potentiel, jamais reproche)
+        soft_frags: list[str] = []
         if not audit.get("is_mobile_friendly"):
-            solutions.append("un site responsive et moderne")
-        if (
-            audit.get("design_dated")
-            and "un site responsive et moderne" not in solutions
-        ):
-            solutions.append("un design dynamique et actuel")
+            soft_frags.append("votre site n'est pas encore optimisé pour les mobiles")
+        if audit.get("design_dated"):
+            soft_frags.append("son design gagnerait à être rafraîchi")
         if not audit.get("has_reservation"):
-            solutions.append("la réservation en direct")
-        if not audit.get("has_contact_form"):
-            solutions.append("un formulaire de contact")
-        if not audit.get("has_embedded_reviews"):
-            solutions.append("vos avis clients mis en avant")
-        if not audit.get("has_map"):
-            solutions.append("une carte d'accès")
-        solutions = solutions[:4]
-        solutions_txt = (
-            ", ".join(solutions) if solutions else "un site moderne et performant"
-        )
+            soft_frags.append("la réservation en direct n'est pas encore possible")
+        if audit.get("has_embedded_reviews") is False:
+            soft_frags.append("les avis de vos clients ne sont pas mis en avant")
+        if audit.get("has_map") is False:
+            soft_frags.append("le plan d'accès n'est pas facile à repérer")
+        if audit.get("has_contact_form") is False:
+            soft_frags.append("il manque un formulaire de contact simple")
 
-        subject = f"{name} : un site qui convertit mieux"
+        soft_frags = soft_frags[:3]
+        if len(soft_frags) > 1:
+            constats_phrase = ", ".join(soft_frags[:-1]) + " et " + soft_frags[-1]
+        elif soft_frags:
+            constats_phrase = soft_frags[0]
+        else:
+            constats_phrase = "quelques détails gagneraient à être valorisés"
+
+        subject = (
+            f"Votre {type_label} mérite un site à la hauteur de l'expérience proposée"
+        )
         body = f"""Bonjour,
 
-J'ai regardé votre site : {lead.website}. Votre {type_label} a clairement de quoi plaire, mais en ligne le site ne lui rend pas encore justice.
+J'ai découvert votre site : {lead.website}
 
-Concrètement : {constats}.
+Votre {type_label} {compliment}, et ça se ressent. Aujourd'hui, votre présence en ligne ne reflète pas encore pleinement la qualité de l'expérience que vous offrez.
 
-Pour transformer un visiteur en client, il faut pouvoir réserver en direct, vous situer en un coup d'œil et se rassurer avec les avis d'autres {visitors_word}.
+La plupart des visiteurs découvrent désormais un établissement depuis leur smartphone. Or {constats_phrase}.
 
-Chez Kawanah, on reprend le site avec {solutions_txt}, et surtout un socle SEO et IA natif pour être visible sur Google comme sur les moteurs IA type ChatGPT.
+Imaginez un site qui permette à vos visiteurs de réserver en quelques clics, de trouver tout de suite les informations pratiques, de se rassurer avec les avis d'autres {visitors_word}, et de découvrir un univers moderne dès la première seconde.
 
-Je vous montre en 15 min ce que ça donnerait pour {name}.
+C'est exactement ce que nous concevons chez Kawanah : des sites touristiques modernes et responsives, avec un socle SEO et IA natif pour être visibles sur Google comme sur les nouveaux moteurs IA type ChatGPT. L'objectif est simple : transformer plus de visiteurs en clients.
+
+Je peux vous montrer en 15 minutes ce à quoi pourrait ressembler une nouvelle version du site de {name}.
 
 {booking_cta}
 
