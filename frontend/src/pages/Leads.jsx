@@ -47,6 +47,26 @@ const fadeUp = {
   transition: { duration: 0.3 },
 };
 
+const WEBSITE_MATCH_LABELS = {
+  unknown: ['À qualifier', 'bg-slate-100 text-slate-700 border-slate-200'],
+  verified: ['Site validé', 'bg-emerald-50 text-emerald-700 border-emerald-200'],
+  needs_review: ['À vérifier', 'bg-amber-50 text-amber-700 border-amber-200'],
+  rejected: ['Site rejeté', 'bg-red-50 text-red-700 border-red-200'],
+  inaccessible: ['Inaccessible', 'bg-orange-50 text-orange-700 border-orange-200'],
+  no_site: ['Sans site', 'bg-primary-50 text-primary-600 border-primary-200'],
+};
+
+const WEBSITE_BLOCKING_STATUSES = new Set(['unknown', 'needs_review', 'rejected', 'inaccessible']);
+
+const blocksCampaignByWebsite = (lead) =>
+  Boolean(lead.website && WEBSITE_BLOCKING_STATUSES.has(lead.website_match_status || 'unknown'));
+
+const getCampaignBlockReason = (lead) => {
+  if (!lead.email) return 'Email manquant';
+  if (blocksCampaignByWebsite(lead)) return 'Site à valider';
+  return null;
+};
+
 function SelectCampaignModal({ lead, onClose, onSuccess }) {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -71,8 +91,19 @@ function SelectCampaignModal({ lead, onClose, onSuccess }) {
     setSending(true);
     setError(null);
     try {
-      await campaignsApi.addLeads(selectedId, [lead.id]);
-      onSuccess('Lead ajouté à la campagne avec succès');
+      const response = await campaignsApi.addLeads(selectedId, [lead.id]);
+      const queued = response.data?.queued ?? 0;
+      const skippedSite = response.data?.skipped_unverified_site ?? 0;
+      const skippedContact = response.data?.skipped_missing_contact ?? 0;
+      onSuccess(
+        queued > 0
+          ? 'Lead ajouté à la campagne avec succès'
+          : skippedContact > 0
+            ? 'Lead bloqué : email manquant'
+            : skippedSite > 0
+              ? 'Lead bloqué : site non vérifié'
+              : response.data?.message || 'Aucun message généré'
+      );
       onClose();
     } catch (err) {
       setError(err.response?.data?.detail || "Erreur lors de l'ajout");
@@ -187,17 +218,31 @@ function SelectCampaignModal({ lead, onClose, onSuccess }) {
   );
 }
 
-function LeadDetailModal({ lead, onClose, onEnrich, enrichingId, onAddToCampaign, onNotesSaved }) {
+function LeadDetailModal({
+  lead,
+  onClose,
+  onEnrich,
+  enrichingId,
+  onAddToCampaign,
+  onNotesSaved,
+  onWebsiteReviewSaved,
+  onWebsiteMatchSaved,
+}) {
   const q = getQualification(lead);
   const status = STATUS_LABELS[lead.status] || STATUS_LABELS.new;
   const [strongArgs, setStrongArgs] = useState([]);
   const [notes, setNotes] = useState(lead.notes || '');
+  const [websiteChecklist, setWebsiteChecklist] = useState(lead.website_review_checklist || {});
+  const [checklistSaving, setChecklistSaving] = useState(false);
+  const [checklistSaved, setChecklistSaved] = useState(false);
+  const [matchSaving, setMatchSaving] = useState(false);
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
 
   useEffect(() => {
     setNotes(lead.notes || '');
-  }, [lead.id, lead.notes]);
+    setWebsiteChecklist(lead.website_review_checklist || {});
+  }, [lead.id, lead.notes, lead.website_review_checklist]);
 
   useEffect(() => {
     if (lead?.id) {
@@ -219,6 +264,52 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId, onAddToCampaign
       // silencieux
     } finally {
       setNotesSaving(false);
+    }
+  };
+
+  const checklistItems = [
+    ['site_officiel', 'Site officiel confirmé'],
+    ['site_accessible', 'Site accessible'],
+    ['reservation', 'Réservation détectée'],
+    ['google_map', 'Carte / géolocalisation'],
+    ['avis_clients', 'Avis clients visibles'],
+    ['formulaire_contact', 'Formulaire de contact'],
+    ['mobile', 'Affichage mobile correct'],
+    ['photos', 'Photos / galerie utiles'],
+    ['horaires', 'Horaires visibles'],
+    ['tarifs', 'Tarifs visibles'],
+  ];
+
+  const toggleChecklistItem = async (key) => {
+    const next = { ...websiteChecklist, [key]: !websiteChecklist[key] };
+    setWebsiteChecklist(next);
+    setChecklistSaving(true);
+    try {
+      await leadsApi.updateWebsiteReview(lead.id, next);
+      onWebsiteReviewSaved?.(lead.id, next);
+      setChecklistSaved(true);
+      setTimeout(() => setChecklistSaved(false), 1200);
+    } catch {
+      setWebsiteChecklist(websiteChecklist);
+    } finally {
+      setChecklistSaving(false);
+    }
+  };
+
+  const matchStatus = lead.website_match_status || 'unknown';
+  const [matchLabel, matchClass] =
+    WEBSITE_MATCH_LABELS[matchStatus] || WEBSITE_MATCH_LABELS.unknown;
+  const campaignBlockReason = getCampaignBlockReason(lead);
+
+  const updateWebsiteMatch = async (status, note = '') => {
+    setMatchSaving(true);
+    try {
+      const response = await leadsApi.updateWebsiteMatch(lead.id, { status, note });
+      onWebsiteMatchSaved?.(lead.id, response.data);
+    } catch {
+      // silencieux
+    } finally {
+      setMatchSaving(false);
     }
   };
 
@@ -558,6 +649,106 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId, onAddToCampaign
             </div>
           )}
 
+          {/* Matching site */}
+          <div className="space-y-2 p-4 bg-white rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">
+                  Fiabilité du site
+                </p>
+                {lead.website ? (
+                  <a
+                    href={lead.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-accent-700 hover:underline break-all"
+                  >
+                    {lead.website}
+                  </a>
+                ) : (
+                  <p className="text-xs text-primary-400">Aucun site attaché</p>
+                )}
+              </div>
+              <span
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold whitespace-nowrap ${matchClass}`}
+              >
+                {matchLabel}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => updateWebsiteMatch('verified', 'Site vérifié manuellement')}
+                disabled={matchSaving || !lead.website}
+                className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              >
+                Valider site
+              </button>
+              <button
+                onClick={() => updateWebsiteMatch('needs_review', 'À revérifier avant message')}
+                disabled={matchSaving}
+                className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 disabled:opacity-50 transition-colors"
+              >
+                À vérifier
+              </button>
+              <button
+                onClick={() => updateWebsiteMatch('rejected', 'Site non fiable pour ce lead')}
+                disabled={matchSaving || !lead.website}
+                className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+              >
+                Rejeter site
+              </button>
+              <button
+                onClick={() => updateWebsiteMatch('no_site', 'Aucun site officiel confirmé')}
+                disabled={matchSaving}
+                className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-xs font-medium hover:bg-primary-100 disabled:opacity-50 transition-colors"
+              >
+                Marquer sans site
+              </button>
+            </div>
+            {campaignBlockReason === 'Site à valider' && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Campagne bloquée tant que le site n’est pas validé ou marqué sans site.
+              </p>
+            )}
+          </div>
+
+          {/* Vérification manuelle site */}
+          <div className="space-y-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">
+                  À vérifier sur le site
+                </p>
+                <p className="text-[11px] text-primary-400 mt-0.5">
+                  Coche seulement ce qui est prouvé. Si on ne sait pas, on laisse décoché.
+                </p>
+              </div>
+              <span className="text-[11px] text-primary-400">
+                {checklistSaving ? 'Sauvegarde...' : checklistSaved ? '✓ Sauvé' : ''}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {checklistItems.map(([key, label]) => (
+                <label
+                  key={key}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                    websiteChecklist[key]
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-white border-slate-200 text-primary-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(websiteChecklist[key])}
+                    onChange={() => toggleChecklistItem(key)}
+                    className="w-3.5 h-3.5 rounded accent-emerald-500"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           {/* Date */}
           {lead.created_at && (
             <div className="flex items-center gap-2 text-xs text-primary-400">
@@ -631,10 +822,11 @@ function LeadDetailModal({ lead, onClose, onEnrich, enrichingId, onAddToCampaign
             </div>
             <button
               onClick={() => onAddToCampaign(lead)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors"
+              disabled={Boolean(campaignBlockReason)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 disabled:bg-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-4 h-4" />
-              Envoyer en campagne
+              {campaignBlockReason || 'Envoyer en campagne'}
             </button>
           </div>
         </div>
@@ -666,6 +858,7 @@ export default function Leads() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [starFilter, setStarFilter] = useState('');
+  const [websiteMatchFilter, setWebsiteMatchFilter] = useState('');
   const perPage = 25;
   const initDone = useRef(false);
 
@@ -703,7 +896,8 @@ export default function Leads() {
         sortBy,
         sortOrder,
         selectedBatch,
-        starFilter
+        starFilter,
+        websiteMatchFilter
       );
     } catch {
       showToast('Erreur lors de la suppression', 'red');
@@ -715,6 +909,7 @@ export default function Leads() {
   const handleExport = () => {
     const params = new URLSearchParams();
     if (statusFilter) params.append('status', statusFilter);
+    if (websiteMatchFilter) params.append('website_match_status', websiteMatchFilter);
     window.open(leadsApi.exportUrl(Object.fromEntries(params)), '_blank');
   };
 
@@ -745,7 +940,8 @@ export default function Leads() {
             sortBy,
             sortOrder,
             selectedBatch,
-            starFilter
+            starFilter,
+            websiteMatchFilter
           ),
         1500
       );
@@ -765,7 +961,8 @@ export default function Leads() {
       sort = 'score',
       order = 'desc',
       batchId = null,
-      stars = ''
+      stars = '',
+      websiteMatch = ''
     ) => {
       setLoading(true);
       setError(null);
@@ -781,6 +978,7 @@ export default function Leads() {
         }
         if (batchId) params.batch_id = batchId;
         if (stars) params.star_rating = stars;
+        if (websiteMatch) params.website_match_status = websiteMatch;
         const res = await leadsApi.list(params);
         const loadedLeads = res.data.leads || [];
         setLeads(loadedLeads);
@@ -841,15 +1039,36 @@ export default function Leads() {
       sortBy,
       sortOrder,
       selectedBatch,
-      starFilter
+      starFilter,
+      websiteMatchFilter
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, typeFilter, sortBy, sortOrder, selectedBatch, starFilter, fetchLeads]);
+  }, [
+    page,
+    statusFilter,
+    typeFilter,
+    sortBy,
+    sortOrder,
+    selectedBatch,
+    starFilter,
+    websiteMatchFilter,
+    fetchLeads,
+  ]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    fetchLeads(1, search, statusFilter, typeFilter, sortBy, sortOrder, selectedBatch, starFilter);
+    fetchLeads(
+      1,
+      search,
+      statusFilter,
+      typeFilter,
+      sortBy,
+      sortOrder,
+      selectedBatch,
+      starFilter,
+      websiteMatchFilter
+    );
   };
 
   const handleStatusFilter = (value) => {
@@ -918,6 +1137,20 @@ export default function Leads() {
               );
               setDetailLead((prev) => (prev ? { ...prev, notes: newNotes } : prev));
             }}
+            onWebsiteReviewSaved={(leadId, checklist) => {
+              setLeads((prev) =>
+                prev.map((l) =>
+                  l.id === leadId ? { ...l, website_review_checklist: checklist } : l
+                )
+              );
+              setDetailLead((prev) =>
+                prev ? { ...prev, website_review_checklist: checklist } : prev
+              );
+            }}
+            onWebsiteMatchSaved={(leadId, patch) => {
+              setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)));
+              setDetailLead((prev) => (prev ? { ...prev, ...patch } : prev));
+            }}
           />
         )}
       </AnimatePresence>
@@ -977,7 +1210,8 @@ export default function Leads() {
                 sortBy,
                 sortOrder,
                 selectedBatch,
-                starFilter
+                starFilter,
+                websiteMatchFilter
               )
             }
             className="p-2 rounded-xl border border-primary-200 hover:bg-primary-50 transition-colors"
@@ -1358,6 +1592,27 @@ export default function Leads() {
         {/* Séparateur visuel */}
         <div className="w-px h-5 bg-primary-200" />
 
+        {/* Fiabilité site */}
+        <select
+          value={websiteMatchFilter}
+          onChange={(e) => {
+            setWebsiteMatchFilter(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary-200 bg-primary-50 text-primary-700 outline-none cursor-pointer hover:bg-primary-100 transition-colors"
+        >
+          <option value="">Tous statuts site</option>
+          <option value="needs_review">Sites à vérifier</option>
+          <option value="verified">Sites validés</option>
+          <option value="rejected">Sites rejetés</option>
+          <option value="inaccessible">Sites inaccessibles</option>
+          <option value="no_site">Sans site confirmé</option>
+          <option value="unknown">Matching inconnu</option>
+        </select>
+
+        {/* Séparateur visuel */}
+        <div className="w-px h-5 bg-primary-200" />
+
         {/* Qualification */}
         <div className="flex items-center gap-1.5">
           <Filter className="w-4 h-4 text-primary-400" />
@@ -1712,9 +1967,11 @@ export default function Leads() {
                             )}
                             <button
                               onClick={() => setCampaignLead(lead)}
-                              title="Envoyer en campagne"
+                              disabled={Boolean(getCampaignBlockReason(lead))}
+                              title={getCampaignBlockReason(lead) || 'Envoyer en campagne'}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xs font-medium
                             bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100
+                            disabled:bg-slate-50 disabled:text-slate-300 disabled:border-slate-200 disabled:cursor-not-allowed
                             transition-colors"
                             >
                               <Send className="w-3 h-3" />

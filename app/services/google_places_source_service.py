@@ -104,6 +104,7 @@ class GooglePlacesSourceService:
 
         total_created = 0
         total_skipped = 0
+        warnings: list[str] = []
         quota_per_type = max(1, max_results // len(lead_types))
 
         async with httpx.AsyncClient(timeout=30) as client:
@@ -111,7 +112,7 @@ class GooglePlacesSourceService:
                 query = f"{QUERY_MAP.get(type_key, type_key)} {location}"
                 lead_type = TYPE_MAP.get(type_key, LeadType.OTHER)
 
-                created, skipped = await self._import_type(
+                created, skipped, type_warnings = await self._import_type(
                     client=client,
                     db=db,
                     batch_id=batch.id,
@@ -121,6 +122,7 @@ class GooglePlacesSourceService:
                 )
                 total_created += created
                 total_skipped += skipped
+                warnings.extend(type_warnings)
 
         batch.total_leads = total_created
         await db.commit()
@@ -133,6 +135,7 @@ class GooglePlacesSourceService:
             "batch_id": batch.id,
             "imported": total_created,
             "skipped": total_skipped,
+            "warnings": warnings,
             "source": "google_places",
             "location": location,
         }
@@ -145,10 +148,11 @@ class GooglePlacesSourceService:
         query: str,
         lead_type: LeadType,
         max_results: int,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, list[str]]:
         """Parcourt les pages de résultats pour un type donné."""
         created = 0
         skipped = 0
+        warnings: list[str] = []
         next_page_token: Optional[str] = None
 
         while (created + skipped) < max_results:
@@ -165,12 +169,27 @@ class GooglePlacesSourceService:
                     "region": "fr",
                 }
 
-            try:
-                resp = await client.get(PLACES_TEXT_SEARCH, params=params)
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception as exc:
-                logger.error(f"Google Places API erreur pour '{query}': {exc}")
+            data = None
+            for attempt in range(4):
+                try:
+                    resp = await client.get(PLACES_TEXT_SEARCH, params=params)
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as exc:
+                    logger.error(f"Google Places API erreur pour '{query}': {exc}")
+                    warnings.append(f"Erreur Google Places pour '{query}'")
+                    break
+
+                status = data.get("status")
+                if next_page_token and status == "INVALID_REQUEST" and attempt < 3:
+                    await asyncio.sleep(2 + attempt)
+                    continue
+                if status == "DEADLINE_EXCEEDED" and attempt < 2:
+                    await asyncio.sleep(1 + attempt)
+                    continue
+                break
+
+            if data is None:
                 break
 
             status = data.get("status")
@@ -180,7 +199,12 @@ class GooglePlacesSourceService:
                     f"Message : {data.get('error_message', '')}"
                 )
             if status not in ("OK", "ZERO_RESULTS"):
-                logger.warning(f"Google Places status '{status}' pour '{query}'")
+                warning = (
+                    f"Google Places a interrompu les pages suivantes pour '{query}' "
+                    f"(status={status}). Les résultats déjà trouvés sont conservés."
+                )
+                warnings.append(warning)
+                logger.warning(warning)
                 break
 
             for place in data.get("results", []):
@@ -226,7 +250,7 @@ class GooglePlacesSourceService:
 
         await db.flush()
         logger.info(f"[Google Places] '{query}': {created} créés, {skipped} ignorés")
-        return created, skipped
+        return created, skipped, warnings
 
 
 def _parse_address(formatted_address: str) -> tuple[Optional[str], Optional[str]]:

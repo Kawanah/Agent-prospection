@@ -29,11 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.models.lead import Lead, LeadStatus
+from app.models.lead import Lead, LeadStatus, WebsiteMatchStatus
 from app.models.contact import Contact, ContactRole
 from app.services.http_safety import MAX_REDIRECTS, validate_public_http_url
 from app.services.scoring_service import WebsiteAnalyzer, build_website_audit
 from app.services.web_verification_service import WebVerificationService
+from app.services.website_matching_service import apply_website_match
 
 settings = get_settings()
 
@@ -772,6 +773,26 @@ class EnrichmentService:
 
         # 1. Scraper le site web si disponible
         if lead.website:
+            match = apply_website_match(
+                lead,
+                lead.website,
+                source=lead.website_match_source or lead.source or "existing",
+            )
+            if match.status != WebsiteMatchStatus.VERIFIED:
+                results["website_matching"] = EnrichmentResult(
+                    source="website_matching",
+                    success=False,
+                    website=lead.website,
+                    error=(
+                        f"Site non validé ({match.status.value}, "
+                        f"confiance={match.confidence})"
+                    ),
+                )
+                lead.has_website = None
+                lead.enriched_at = datetime.utcnow()
+                await self.db.commit()
+                return results
+
             result = await self.website_scraper.scrape(lead.website)
             results["website"] = result
 
@@ -864,10 +885,21 @@ class EnrichmentService:
                     gp_website = details.get("website")
                     if gp_website and not lead.website:
                         lead.website = gp_website
-                        lead.has_website = True
-                        logger.info(f"Site trouvé via Google Places: {gp_website}")
+                        match = apply_website_match(
+                            lead, gp_website, source="google_places"
+                        )
+                        lead.has_website = match.status == WebsiteMatchStatus.VERIFIED
+                        logger.info(
+                            f"Site trouvé via Google Places: {gp_website} "
+                            f"({match.status.value}, confiance={match.confidence})"
+                        )
                         results["google_places_website"] = EnrichmentResult(
-                            source="google_places", success=True, website=gp_website
+                            source="google_places",
+                            success=match.status == WebsiteMatchStatus.VERIFIED,
+                            website=gp_website,
+                            error=None
+                            if match.status == WebsiteMatchStatus.VERIFIED
+                            else "Site à vérifier avant exploitation",
                         )
                     # Avis Google
                     gp_rating = details.get("rating")
@@ -892,12 +924,19 @@ class EnrichmentService:
             )
             if found.found and found.url:
                 lead.website = found.url
-                lead.has_website = True
+                match = apply_website_match(lead, found.url, source="web_search")
+                lead.has_website = match.status == WebsiteMatchStatus.VERIFIED
                 logger.info(
-                    f"Site trouvé via DuckDuckGo: {found.url} (confiance: {found.confidence})"
+                    f"Site trouvé via DuckDuckGo: {found.url} "
+                    f"(matching={match.status.value}, confiance={match.confidence})"
                 )
                 results["web_search"] = EnrichmentResult(
-                    source="web_search", success=True, website=found.url
+                    source="web_search",
+                    success=match.status == WebsiteMatchStatus.VERIFIED,
+                    website=found.url,
+                    error=None
+                    if match.status == WebsiteMatchStatus.VERIFIED
+                    else "Site à vérifier avant exploitation",
                 )
             else:
                 # Ni Google Places ni DuckDuckGo n'ont trouvé — on reste sur "inconnu"
@@ -905,7 +944,12 @@ class EnrichmentService:
 
         # === SECOND PASSAGE : scraper le site web si trouvé après le 1er passage ===
         # (Google Places ou DuckDuckGo a trouvé le site, mais on ne l'avait pas encore scrapé)
-        if lead.website and not lead.email and "website" not in results:
+        if (
+            lead.website
+            and lead.website_match_status == WebsiteMatchStatus.VERIFIED
+            and not lead.email
+            and "website" not in results
+        ):
             logger.info(f"Second passage scraping: {lead.website}")
             result = await self.website_scraper.scrape(lead.website)
             results["website_2nd_pass"] = result
@@ -922,7 +966,7 @@ class EnrichmentService:
                     await self._create_contact(lead, contact_info)
 
         # === ANALYSE QUALITÉ DU SITE WEB ===
-        if lead.website:
+        if lead.website and lead.website_match_status == WebsiteMatchStatus.VERIFIED:
             analyzer = WebsiteAnalyzer()
             try:
                 analysis = await analyzer.analyze(lead.website)

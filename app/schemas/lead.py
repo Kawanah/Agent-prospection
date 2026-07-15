@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from app.models.lead import LeadStatus, LeadType
+from app.models.lead import LeadStatus, LeadType, WebsiteMatchStatus
 
 
 class LeadImportRow(BaseModel):
@@ -115,6 +115,12 @@ class LeadResponse(BaseModel):
     address: Optional[str] = None
     website: Optional[str] = None
     has_website: Optional[bool] = None
+    website_match_status: WebsiteMatchStatus = WebsiteMatchStatus.UNKNOWN
+    website_match_confidence: Optional[int] = None
+    website_match_source: Optional[str] = None
+    website_match_reasons: Optional[dict] = None
+    website_review_checklist: Optional[dict] = None
+    website_validated_at: Optional[datetime] = None
     website_quality_score: Optional[int] = None
     phone: Optional[str] = None
     email: Optional[str] = None

@@ -20,7 +20,6 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    BackgroundTasks,
     UploadFile,
     File,
     Query,
@@ -135,11 +134,17 @@ async def import_google_places(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    warning_suffix = (
+        f" Import partiel : {len(result.get('warnings', []))} avertissement(s) Google."
+        if result.get("warnings")
+        else ""
+    )
     return {
         **result,
         "message": (
             f"{result['imported']} établissements importés depuis Google Places "
             f"({body.location}). Pensez à les enrichir pour récupérer emails et téléphones."
+            f"{warning_suffix}"
         ),
     }
 

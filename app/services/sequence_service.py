@@ -14,14 +14,13 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.lead import Lead, LeadStatus
-from app.models.campaign import Campaign, CampaignStatus, CampaignChannel
+from app.models.lead import Lead, LeadStatus, WebsiteMatchStatus
+from app.models.campaign import Campaign, CampaignChannel
 from app.models.message import (
     Message,
     MessageChannel,
     MessageDirection,
     MessageStatus,
-    SentimentType,
 )
 from app.services.ai_service import AIService, MessageChannel as AIChannel, MessageTone
 from app.services.email_service import EmailService
@@ -43,6 +42,33 @@ class SequenceService:
     def __init__(self):
         self.ai_service = AIService()
         self.email_service = EmailService()
+
+    @staticmethod
+    def _has_campaign_blocking_site_issue(lead: Lead) -> bool:
+        """Bloque les brouillons si le site attaché au lead n'est pas fiable."""
+        if not lead.website:
+            return False
+
+        status = getattr(lead, "website_match_status", WebsiteMatchStatus.UNKNOWN)
+        if isinstance(status, str):
+            try:
+                status = WebsiteMatchStatus(status)
+            except ValueError:
+                status = WebsiteMatchStatus.UNKNOWN
+
+        return status in {
+            WebsiteMatchStatus.UNKNOWN,
+            WebsiteMatchStatus.NEEDS_REVIEW,
+            WebsiteMatchStatus.REJECTED,
+            WebsiteMatchStatus.INACCESSIBLE,
+        }
+
+    @staticmethod
+    def _has_required_contact_for_campaign(lead: Lead, campaign: Campaign) -> bool:
+        """Vérifie le contact minimum selon le canal de campagne."""
+        if campaign.channel == CampaignChannel.EMAIL:
+            return bool((lead.email or "").strip())
+        return True
 
     # ── 1. Lancement d'une campagne ───────────────────────────────────────────
 
@@ -93,9 +119,29 @@ class SequenceService:
         # On commence à "maintenant" pour le premier, puis on décale
         scheduled_at = datetime.utcnow()
         queued_count = 0
+        skipped_unverified_site = 0
+        skipped_missing_contact = 0
 
         for lead in leads:
             try:
+                if not self._has_required_contact_for_campaign(lead, campaign):
+                    skipped_missing_contact += 1
+                    logger.warning(
+                        "Lead %s non ajouté à la campagne : contact manquant pour %s",
+                        lead.id,
+                        campaign.channel,
+                    )
+                    continue
+
+                if self._has_campaign_blocking_site_issue(lead):
+                    skipped_unverified_site += 1
+                    logger.warning(
+                        "Lead %s bloqué campagne : site non vérifié (%s)",
+                        lead.id,
+                        lead.website_match_status,
+                    )
+                    continue
+
                 # Générer le message avec l'IA (ou démo si pas de clé)
                 generated = self.ai_service.generate_message(
                     lead=lead,
@@ -138,7 +184,13 @@ class SequenceService:
 
         return {
             "queued": queued_count,
-            "message": f"{queued_count} messages générés et planifiés",
+            "skipped_unverified_site": skipped_unverified_site,
+            "skipped_missing_contact": skipped_missing_contact,
+            "message": (
+                f"{queued_count} messages générés. "
+                f"{skipped_unverified_site} lead(s) bloqué(s) car site non vérifié. "
+                f"{skipped_missing_contact} lead(s) bloqué(s) car contact manquant."
+            ),
         }
 
     # ── 1b. Ajout de leads spécifiques à une campagne ─────────────────────────
@@ -168,9 +220,29 @@ class SequenceService:
         )
         scheduled_at = datetime.utcnow()
         queued_count = 0
+        skipped_unverified_site = 0
+        skipped_missing_contact = 0
 
         for lead in leads:
             try:
+                if not self._has_required_contact_for_campaign(lead, campaign):
+                    skipped_missing_contact += 1
+                    logger.warning(
+                        "Lead %s non ajouté à la campagne : contact manquant pour %s",
+                        lead.id,
+                        campaign.channel,
+                    )
+                    continue
+
+                if self._has_campaign_blocking_site_issue(lead):
+                    skipped_unverified_site += 1
+                    logger.warning(
+                        "Lead %s non ajouté à la campagne : site non vérifié (%s)",
+                        lead.id,
+                        lead.website_match_status,
+                    )
+                    continue
+
                 generated = self.ai_service.generate_message(
                     lead=lead,
                     channel=ai_channel,
@@ -198,7 +270,13 @@ class SequenceService:
         await db.commit()
         return {
             "queued": queued_count,
-            "message": f"{queued_count} message(s) planifié(s)",
+            "skipped_unverified_site": skipped_unverified_site,
+            "skipped_missing_contact": skipped_missing_contact,
+            "message": (
+                f"{queued_count} message(s) généré(s). "
+                f"{skipped_unverified_site} lead(s) bloqué(s) car site non vérifié. "
+                f"{skipped_missing_contact} lead(s) bloqué(s) car contact manquant."
+            ),
         }
 
     # ── 2. Traitement de la file d'attente ────────────────────────────────────

@@ -324,7 +324,10 @@ function ImportResultCard({ result, color }) {
     >
       <div className="flex items-center gap-3 mb-4">
         <CheckCircle className={`w-6 h-6 ${c.text}`} />
-        <h3 className={`font-semibold text-lg ${c.text}`}>Import terminé</h3>
+        <div>
+          <h3 className={`font-semibold text-lg ${c.text}`}>Import terminé</h3>
+          {result.message && <p className="text-xs text-primary-500 mt-0.5">{result.message}</p>}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4 mb-4">
         {[
@@ -339,6 +342,15 @@ function ImportResultCard({ result, color }) {
           </div>
         ))}
       </div>
+      {result.warnings?.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Import partiel mais réussi</p>
+          <p className="text-xs mt-1">
+            Google a coupé une page de résultats après l’import. Les leads déjà trouvés sont
+            conservés.
+          </p>
+        </div>
+      )}
       <a
         href="/leads"
         className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-white text-sm font-semibold transition-colors ${c.btn}`}
@@ -357,7 +369,17 @@ function GooglePlacesBlock() {
   const [maxResults, setMaxResults] = useState(200);
   const { loading, result, error, run } = useImportRequest(importsApi.googlePlaces);
 
-  const canSubmit = location.trim().length >= 2 && selectedTypes.length > 0 && !loading;
+  const trimmedLocation = location.trim();
+  const missingLocation = trimmedLocation.length < 2;
+  const missingTypes = selectedTypes.length === 0;
+  const canSubmit = !missingLocation && !missingTypes && !loading;
+  const submitHint = missingLocation
+    ? 'Renseignez une zone géographique'
+    : missingTypes
+      ? 'Sélectionnez au moins un type'
+      : loading
+        ? 'Recherche en cours…'
+        : null;
 
   return (
     <div className="space-y-5">
@@ -471,14 +493,14 @@ function GooglePlacesBlock() {
                 · {location} · max {maxResults}
               </span>
             ) : (
-              <span className="text-amber-500">Renseignez la zone géographique</span>
+              <span className="text-amber-500">{submitHint}</span>
             )}
           </p>
           <button
             onClick={() =>
               run({
                 lead_types: selectedTypes,
-                location: location.trim(),
+                location: trimmedLocation,
                 radius_km: radiusKm,
                 max_results: maxResults,
               })

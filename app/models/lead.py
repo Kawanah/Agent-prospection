@@ -38,6 +38,17 @@ class LeadStatus(str, Enum):
     INVALID = "invalid"  # Données invalides
 
 
+class WebsiteMatchStatus(str, Enum):
+    """Statut de fiabilité du site associé au lead."""
+
+    UNKNOWN = "unknown"
+    VERIFIED = "verified"
+    NEEDS_REVIEW = "needs_review"
+    REJECTED = "rejected"
+    INACCESSIBLE = "inaccessible"
+    NO_SITE = "no_site"
+
+
 class LeadType(str, Enum):
     """Type d'établissement."""
 
@@ -100,6 +111,14 @@ class Lead(Base):
 
     # Analyse du site web existant
     has_website: Mapped[Optional[bool]] = mapped_column(default=None)
+    website_match_status: Mapped[WebsiteMatchStatus] = mapped_column(
+        SQLEnum(WebsiteMatchStatus), default=WebsiteMatchStatus.UNKNOWN, index=True
+    )
+    website_match_confidence: Mapped[Optional[int]] = mapped_column(Integer)
+    website_match_source: Mapped[Optional[str]] = mapped_column(String(100))
+    website_match_reasons: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
+    website_review_checklist: Mapped[Optional[dict]] = mapped_column(JSON, default=None)
+    website_validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     website_quality_score: Mapped[Optional[int]] = mapped_column(Integer)  # 0-100
     has_booking_system: Mapped[Optional[bool]] = mapped_column(default=None)
     booking_platform: Mapped[Optional[str]] = mapped_column(

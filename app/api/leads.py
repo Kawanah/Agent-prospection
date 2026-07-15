@@ -5,6 +5,7 @@ API endpoints pour la gestion des Leads.
 import csv
 import io
 import shutil
+from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Optional
@@ -15,9 +16,9 @@ from sqlalchemy import select, func
 from loguru import logger
 
 from app.database import get_db
-from app.models.lead import Lead, LeadStatus, LeadType
+from app.models.lead import Lead, LeadStatus, LeadType, WebsiteMatchStatus
 from app.models.import_batch import ImportBatch
-from app.models.message import Message, MessageStatus
+from app.models.message import Message
 from app.models.campaign import Campaign
 from app.schemas.lead import LeadResponse, LeadListResponse, ImportResult
 from app.services.import_service import import_file
@@ -47,6 +48,9 @@ async def list_leads(
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Score minimum"),
     city: Optional[str] = Query(None, description="Filtrer par ville"),
     has_website: Optional[bool] = Query(None, description="A un site web ?"),
+    website_match_status: Optional[WebsiteMatchStatus] = Query(
+        None, description="Filtrer par statut de fiabilité du site"
+    ),
     sort_by: Optional[str] = Query(None, description="Tri : score, created_at, name"),
     sort_order: Optional[str] = Query("desc", description="Ordre : asc ou desc"),
     batch_id: Optional[int] = Query(None, description="Filtrer par lot d'import"),
@@ -73,6 +77,8 @@ async def list_leads(
         query = query.where(Lead.city.ilike(f"%{city}%"))
     if has_website is not None:
         query = query.where(Lead.has_website == has_website)
+    if website_match_status:
+        query = query.where(Lead.website_match_status == website_match_status)
     if batch_id is not None:
         query = query.where(Lead.batch_id == batch_id)
     if star_rating:
@@ -130,6 +136,7 @@ async def export_leads_csv(
     lead_type: Optional[LeadType] = Query(None),
     min_score: Optional[int] = Query(None, ge=0, le=100),
     has_website: Optional[bool] = Query(None),
+    website_match_status: Optional[WebsiteMatchStatus] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Exporte tous les leads filtrés au format CSV."""
@@ -142,6 +149,8 @@ async def export_leads_csv(
         query = query.where(Lead.score >= min_score)
     if has_website is not None:
         query = query.where(Lead.has_website == has_website)
+    if website_match_status:
+        query = query.where(Lead.website_match_status == website_match_status)
     query = query.order_by(Lead.score.desc())
 
     result = await db.execute(query)
@@ -162,6 +171,8 @@ async def export_leads_csv(
             "score",
             "statut",
             "a_site_web",
+            "statut_matching_site",
+            "confiance_matching_site",
             "nouvelle_entreprise",
             "siren",
             "forme_juridique",
@@ -184,6 +195,12 @@ async def export_leads_csv(
                 lead.score,
                 lead.status.value if lead.status else "",
                 lead.has_website,
+                lead.website_match_status.value if lead.website_match_status else "",
+                (
+                    lead.website_match_confidence
+                    if lead.website_match_confidence is not None
+                    else ""
+                ),
                 lead.is_nouvelle_entreprise,
                 lead.siren or "",
                 lead.forme_juridique or "",
@@ -219,11 +236,11 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
     # with_website = has_website confirmé True après enrichissement
     with_website = await db.execute(
-        select(func.count(Lead.id)).where(Lead.has_website == True)
+        select(func.count(Lead.id)).where(Lead.has_website.is_(True))
     )
     # without_website = has_website confirmé False après enrichissement
     without_website = await db.execute(
-        select(func.count(Lead.id)).where(Lead.has_website == False)
+        select(func.count(Lead.id)).where(Lead.has_website.is_(False))
     )
     # has_url = URL présente dans la source (data.gouv.fr) mais pas encore vérifiée
     has_url = await db.execute(
@@ -248,11 +265,11 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
     # Stats nouvelles entreprises
     ne_total_result = await db.execute(
-        select(func.count(Lead.id)).where(Lead.is_nouvelle_entreprise == True)
+        select(func.count(Lead.id)).where(Lead.is_nouvelle_entreprise.is_(True))
     )
     ne_enriched_result = await db.execute(
         select(func.count(Lead.id)).where(
-            Lead.is_nouvelle_entreprise == True,
+            Lead.is_nouvelle_entreprise.is_(True),
             Lead.status == LeadStatus.ENRICHED,
         )
     )
@@ -277,7 +294,6 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 @router.get("/batches")
 async def list_batches(db: AsyncSession = Depends(get_db)):
     """Retourne les lots d'import avec leurs statistiques."""
-    from datetime import date
 
     result = await db.execute(
         select(ImportBatch).order_by(ImportBatch.created_at.desc())
@@ -290,18 +306,21 @@ async def list_batches(db: AsyncSession = Depends(get_db)):
         leads_q = await db.execute(select(Lead).where(Lead.batch_id == batch.id))
         leads = leads_q.scalars().all()
 
-        enriched = sum(1 for l in leads if l.status and l.status.value == "enriched")
+        enriched = sum(
+            1 for lead in leads if lead.status and lead.status.value == "enriched"
+        )
         contacted = sum(
             1
-            for l in leads
-            if l.status and l.status.value in ("contacted", "replied", "converted")
+            for lead in leads
+            if lead.status
+            and lead.status.value in ("contacted", "replied", "converted")
         )
 
         depts = {}
         types = set()
-        for l in leads:
-            if l.postal_code:
-                pc = str(l.postal_code).strip()
+        for lead in leads:
+            if lead.postal_code:
+                pc = str(lead.postal_code).strip()
                 # Corse : 2A/2B, DOM-TOM : 97x
                 if pc.startswith("20") and len(pc) == 5:
                     dept = "2A" if pc < "20200" else "2B"
@@ -310,8 +329,8 @@ async def list_batches(db: AsyncSession = Depends(get_db)):
                 else:
                     dept = pc[:2]
                 depts[dept] = depts.get(dept, 0) + 1
-            if l.lead_type:
-                types.add(l.lead_type.value)
+            if lead.lead_type:
+                types.add(lead.lead_type.value)
 
         top_depts = [d for d, _ in sorted(depts.items(), key=lambda x: -x[1])[:3]]
 
@@ -371,9 +390,11 @@ async def get_leads_campaign_status(
             out[lid] = {
                 "campaign_id": row.campaign_id,
                 "campaign_name": row.campaign_name,
-                "message_status": row.message_status.value
-                if hasattr(row.message_status, "value")
-                else row.message_status,
+                "message_status": (
+                    row.message_status.value
+                    if hasattr(row.message_status, "value")
+                    else row.message_status
+                ),
             }
     return out
 
@@ -406,6 +427,89 @@ async def update_lead_notes(
     lead.notes = payload.get("notes", "").strip() or None
     await db.commit()
     return {"id": lead_id, "notes": lead.notes}
+
+
+@router.patch("/{lead_id}/website-review")
+async def update_lead_website_review(
+    lead_id: int, payload: dict, db: AsyncSession = Depends(get_db)
+):
+    """Met à jour la checklist de vérification manuelle du site."""
+    allowed_keys = {
+        "site_officiel",
+        "site_accessible",
+        "reservation",
+        "google_map",
+        "avis_clients",
+        "formulaire_contact",
+        "mobile",
+        "photos",
+        "horaires",
+        "tarifs",
+    }
+
+    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trouvé")
+
+    checklist = payload.get("checklist") or {}
+    cleaned = {
+        key: bool(checklist.get(key)) for key in allowed_keys if key in checklist
+    }
+    lead.website_review_checklist = cleaned or None
+    await db.commit()
+    return {"id": lead_id, "website_review_checklist": lead.website_review_checklist}
+
+
+@router.patch("/{lead_id}/website-match")
+async def update_lead_website_match(
+    lead_id: int, payload: dict, db: AsyncSession = Depends(get_db)
+):
+    """Décision manuelle sur la fiabilité du site rattaché au lead."""
+    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trouvé")
+
+    raw_status = payload.get("status")
+    try:
+        status = WebsiteMatchStatus(raw_status)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Statut website_match invalide")
+
+    lead.website_match_status = status
+    lead.website_match_source = payload.get("source") or "manual"
+    lead.website_match_confidence = int(
+        payload.get("confidence", 100 if status == WebsiteMatchStatus.VERIFIED else 0)
+    )
+    lead.website_match_reasons = {
+        "manual": True,
+        "decision": status.value,
+        "note": (payload.get("note") or "").strip() or None,
+    }
+
+    if status == WebsiteMatchStatus.VERIFIED:
+        lead.has_website = True
+        lead.website_validated_at = datetime.utcnow()
+    elif status in {WebsiteMatchStatus.REJECTED, WebsiteMatchStatus.NO_SITE}:
+        lead.has_website = False
+        lead.website_validated_at = datetime.utcnow()
+        if status == WebsiteMatchStatus.NO_SITE:
+            lead.website = None
+    elif status in {WebsiteMatchStatus.NEEDS_REVIEW, WebsiteMatchStatus.INACCESSIBLE}:
+        lead.has_website = None
+
+    await db.commit()
+    return {
+        "id": lead_id,
+        "website": lead.website,
+        "has_website": lead.has_website,
+        "website_match_status": lead.website_match_status.value,
+        "website_match_confidence": lead.website_match_confidence,
+        "website_match_source": lead.website_match_source,
+        "website_match_reasons": lead.website_match_reasons,
+        "website_validated_at": lead.website_validated_at,
+    }
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)

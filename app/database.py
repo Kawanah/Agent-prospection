@@ -68,6 +68,12 @@ async def init_db():
             ("bodacc_publication_date", "DATE"),
             ("rcs_score", "INTEGER"),
             ("website_audit", "JSON"),
+            ("website_match_status", "VARCHAR(20) DEFAULT 'unknown'"),
+            ("website_match_confidence", "INTEGER"),
+            ("website_match_source", "VARCHAR(100)"),
+            ("website_match_reasons", "JSON"),
+            ("website_review_checklist", "JSON"),
+            ("website_validated_at", "DATETIME"),
         ]
         for col_name, col_type in new_lead_cols:
             if col_name not in columns:

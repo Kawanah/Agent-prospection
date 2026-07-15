@@ -24,6 +24,8 @@ from sqlalchemy import select, func
 
 from app.models.lead import Lead, LeadStatus, LeadType
 from app.config import get_settings
+from app.models.lead import WebsiteMatchStatus
+from app.services.website_matching_service import apply_website_match
 
 settings = get_settings()
 
@@ -776,6 +778,33 @@ class ScoringService:
 
         # Analyser le site web si URL disponible
         if lead.website:
+            if lead.website_match_status != WebsiteMatchStatus.VERIFIED:
+                match = apply_website_match(
+                    lead,
+                    lead.website,
+                    source=lead.website_match_source or lead.source or "existing",
+                )
+                if match.status != WebsiteMatchStatus.VERIFIED:
+                    lead.has_website = None
+                    lead.website_quality_score = None
+                    lead.website_audit = None
+                    lead.score = lead.calculate_score()
+                    await self.db.commit()
+                    logger.warning(
+                        f"Analyse bloquée pour {lead.name}: site non validé "
+                        f"({match.status.value}, confiance={match.confidence})"
+                    )
+                    return {
+                        "lead_id": lead.id,
+                        "lead_name": lead.name,
+                        "website": lead.website,
+                        "website_match_status": match.status.value,
+                        "website_match_confidence": match.confidence,
+                        "blocked": True,
+                        "reason": "site_matching_not_verified",
+                        "final_score": lead.score,
+                    }
+
             analysis_result = await self.analyzer.analyze(lead.website)
 
             if analysis_result.success:

@@ -12,7 +12,7 @@ from anthropic import Anthropic
 from loguru import logger
 
 from app.config import get_settings
-from app.models.lead import Lead
+from app.models.lead import Lead, WebsiteMatchStatus
 from app.services.ai_context import (
     get_regional_context,
     get_seasonal_context,
@@ -64,13 +64,15 @@ OFFRE KAWANAH TOURISME (à utiliser comme arguments concrets, pas comme catalogu
 - Différenciateur unique : un socle SEO et IA natif intégré dès la conception. Le site est compris,
   indexé et recommandé par Google ET par les moteurs de réponse IA (ChatGPT, Perplexity, etc.).
 - Sites responsives, modernes et dynamiques, qui mettent le lieu en valeur (photos, ambiance, expérience).
-- Fonctionnalités qui convertissent : formulaire de contact, réservation en direct, carte d'accès,
+- Fonctionnalités qui convertissent selon le type de prospect : formulaire de contact, demande d'inscription,
+  demande de devis, réservation en direct quand elle est réellement pertinente, carte d'accès,
   avis clients mis en avant, navigation claire et rapide.
-- Réservation directe : plus de réservations en propre, moins de dépendance aux intermédiaires.
+- Réservation directe : uniquement pour les hébergements ou activités où une réservation est explicitement détectée.
 
 UTILISATION DANS LES EMAILS :
 Choisir l'angle qui correspond au lead et à son audit. Nommer un ou deux manques concrets du site,
-montrer ce que ça coûte en clients ou en réservations, puis ce que Kawanah met en face. Vendeur, pas agressif.
+montrer ce que ça coûte en demandes, inscriptions, contacts ou réservations selon le cas, puis ce que Kawanah met en face.
+Vendeur, pas agressif.
 """
 
     # ─── Règles de style globales injectées dans chaque prompt ────────────────
@@ -82,12 +84,14 @@ RÈGLES DE STYLE ABSOLUES (à respecter impérativement) :
   1. Bonjour,
   2. ATTENTION : "J'ai découvert votre site : [URL]" puis un compliment sincère sur l'établissement et ce qu'il propose. Enchaîner : "votre présence en ligne ne reflète pas encore pleinement la qualité de l'expérience que vous offrez"
   3. INTÉRÊT : rappeler que la plupart des visiteurs découvrent un établissement depuis leur smartphone, puis présenter 2 ou 3 constats de l'audit comme un POTENTIEL à révéler, jamais comme un défaut (ex : "votre site n'est pas encore optimisé pour les mobiles", "son design gagnerait à être rafraîchi"). Tournures douces : "pas encore", "gagnerait à", "mérite"
-  4. DÉSIR : "Imaginez un site qui permette à vos visiteurs de..." puis les bénéfices concrets (réserver en quelques clics, trouver les infos pratiques, lire les avis qui rassurent, découvrir un univers moderne)
-  5. Le différenciateur Kawanah : sites modernes et responsives, avec un socle SEO et IA natif (visibles sur Google ET sur les moteurs IA type ChatGPT). Objectif : transformer plus de visiteurs en clients
+  4. DÉSIR : "Imaginez un site qui permette à vos visiteurs de..." puis les bénéfices concrets adaptés au prospect (trouver les infos pratiques, s'inscrire ou contacter facilement, réserver seulement si pertinent, lire les avis qui rassurent, découvrir un univers moderne)
+  5. Le différenciateur Kawanah : sites modernes et responsives, avec un socle SEO et IA natif (visibles sur Google ET sur les moteurs IA type ChatGPT). Objectif : transformer plus de visiteurs en demandes, inscriptions, contacts ou réservations selon le cas
   6. ACTION : proposition courte ("je peux vous montrer en 15 minutes à quoi pourrait ressembler une nouvelle version du site de [nom]"), puis la phrase de rendez-vous exacte, formule de politesse et signature
 - TOUJOURS commencer par "Bonjour," sur une ligne seule
 - TOUJOURS citer l'URL du site juste après "J'ai découvert votre site :"
 - TOUJOURS s'appuyer sur les constats réels de l'AUDIT CONCRET fourni. Ne rien inventer qui n'y figure pas
+- INTERDICTION d'affirmer qu'il existe ou manque une réservation, une plateforme tierce ou un parcours de réservation si ce n'est pas explicitement détecté
+- Pour un club, une association, un loisir ou une activité sportive, parler plutôt d'inscription, de demande de contact, d'informations pratiques, d'horaires, de lieu, d'avis et de visibilité locale. Ne pas parler de réservation sauf preuve explicite
 - Convaincre par la valorisation et le bénéfice, jamais par la peur ou le reproche
 - INTERDICTION de dénigrer ou de mettre le prospect à l'index : on ne dit jamais que son site est "mauvais", "nul", "dépassé", "à la traîne". On parle de potentiel, de mise à niveau, d'opportunité
 - JAMAIS de guillemets « » ou " " dans le message
@@ -317,6 +321,7 @@ class AIService:
         - hook : phrase d'accroche percutante à utiliser dans le message
         """
         args = []
+        lead_type = lead.lead_type.value if lead.lead_type else "other"
         type_label = {
             "hotel": "hôtel",
             "camping": "camping",
@@ -325,7 +330,7 @@ class AIService:
             "residence": "résidence",
             "activite": "prestataire d'activités",
             "other": "établissement",
-        }.get(lead.lead_type.value if lead.lead_type else "other", "établissement")
+        }.get(lead_type, "établissement")
         city = lead.city or "votre ville"
         name = lead.name
         website_lower = (lead.website or "").lower()
@@ -425,25 +430,39 @@ class AIService:
 
         # ── 5. PAS MOBILE-FRIENDLY ──
         if lead.is_mobile_friendly is False:
+            mobile_context = (
+                "or beaucoup de visiteurs découvrent une activité depuis leur téléphone."
+                if lead_type == "activite"
+                else "or beaucoup de voyageurs comparent depuis leur téléphone."
+            )
             args.append(
                 {
                     "key": "pas_mobile",
                     "weight": 75,
                     "label": "Site non adapté mobile",
-                    "hook": f"Le site de {name} ne s'affiche pas correctement sur téléphone, "
-                    f"or +60% des recherches hôtelières se font sur mobile.",
+                    "hook": f"Le site de {name} ne s'affiche pas correctement sur téléphone, {mobile_context}",
                 }
             )
 
         # ── 6. PAS DE RÉSERVATION DIRECTE ──
-        if lead.has_booking_system is False:
+        if (
+            lead_type
+            in (
+                "hotel",
+                "camping",
+                "gite",
+                "chambre_hotes",
+                "residence",
+            )
+            and lead.has_booking_system is False
+        ):
             args.append(
                 {
                     "key": "pas_resa_directe",
                     "weight": 70,
                     "label": "Pas de réservation directe",
-                    "hook": f"Aucun moteur de réservation sur le site, les visiteurs sont redirigés "
-                    f"vers des plateformes tierces, avec les commissions qui vont avec.",
+                    "hook": "Aucun moteur de réservation sur le site, les visiteurs sont redirigés "
+                    "vers des plateformes tierces, avec les commissions qui vont avec.",
                 }
             )
 
@@ -555,7 +574,44 @@ class AIService:
                 f"Mobile-friendly: {'Oui' if lead.is_mobile_friendly else 'Non'}"
             )
 
-        if lead.has_booking_system is not None:
+        checklist = getattr(lead, "website_review_checklist", None) or {}
+        if isinstance(checklist, dict):
+            checked_labels = {
+                "site_officiel": "site officiel confirmé manuellement",
+                "site_accessible": "site accessible",
+                "reservation": "réservation détectée",
+                "google_map": "carte / géolocalisation visible",
+                "avis_clients": "avis clients visibles",
+                "formulaire_contact": "formulaire de contact visible",
+                "mobile": "affichage mobile correct",
+                "photos": "photos ou galerie utiles",
+                "horaires": "horaires visibles",
+                "tarifs": "tarifs visibles",
+            }
+            checked = [
+                label
+                for key, label in checked_labels.items()
+                if bool(checklist.get(key))
+            ]
+            if checked:
+                context_parts.append("")
+                context_parts.append("═══ VALIDATION MANUELLE SITE ═══")
+                context_parts.extend([f"- {label}" for label in checked])
+                context_parts.append(
+                    "INSTRUCTION : ces points sont prouvés et peuvent être utilisés. "
+                    "Ne pas inventer les points non cochés."
+                )
+
+        lead_type_val = lead.lead_type.value if lead.lead_type else "other"
+        booking_relevant = lead_type_val in (
+            "hotel",
+            "camping",
+            "gite",
+            "chambre_hotes",
+            "residence",
+        )
+
+        if booking_relevant and lead.has_booking_system is not None:
             if lead.has_booking_system:
                 if lead.booking_platform:
                     context_parts.append(
@@ -585,8 +641,9 @@ class AIService:
             context_parts.append(
                 "INSTRUCTION : nommer 2 ou 3 de ces constats dans le message comme "
                 "observations factuelles, puis montrer ce que Kawanah apporte en face "
-                "(responsive et design moderne, formulaires de contact et de réservation "
-                "en direct, avis clients mis en avant, carte d'accès, visibilité Google + IA)."
+                "(responsive et design moderne, formulaire de contact ou d'inscription, "
+                "réservation directe seulement si elle est pertinente et détectée, "
+                "avis clients mis en avant, carte d'accès, visibilité Google + IA)."
             )
             context_parts.append("")
 
@@ -678,6 +735,20 @@ class AIService:
             sender_name: Nom de l'expéditeur
             custom_instructions: Instructions supplémentaires pour l'IA
         """
+        website_match_status = getattr(
+            lead, "website_match_status", WebsiteMatchStatus.UNKNOWN
+        )
+        if isinstance(website_match_status, str):
+            try:
+                website_match_status = WebsiteMatchStatus(website_match_status)
+            except ValueError:
+                website_match_status = WebsiteMatchStatus.UNKNOWN
+
+        if lead.website and website_match_status != WebsiteMatchStatus.VERIFIED:
+            return self._generate_unverified_site_message(
+                lead, channel, tone, sender_name
+            )
+
         if not self.client:
             # Mode démo sans API
             return self._generate_demo_message(
@@ -704,7 +775,7 @@ class AIService:
                 "MAUVAIS SEO : 'présence Google à vérifier' ou '[nom] sur Google'. "
                 "GEO/IA : 'ce que ChatGPT dit de vous' ou 'ChatGPT connaît-il [nom] ?'. "
                 "SITE CASSÉ : 'votre site, erreur ce matin'. "
-                "PAS DE RÉSA DIRECTE : 'réservation directe, [nom]' ou 'réserver chez vous directement'. "
+                "PAS DE RÉSA DIRECTE : uniquement pour hébergements avec absence réellement détectée. "
                 "Corps : 5-7 lignes max, paragraphes courts."
             ),
             MessageChannel.LINKEDIN: (
@@ -716,7 +787,7 @@ class AIService:
         seasonal = self._get_seasonal_context()
 
         prompt = f"""Tu es Laetitia, spécialiste web & référencement pour l'hospitalité chez Kawanah Tourisme.
-Tu prospectes des établissements touristiques (hôtels, campings, gîtes, chambres d'hôtes).
+Tu prospectes des établissements touristiques, loisirs et activités locales (hôtels, campings, gîtes, chambres d'hôtes, parcs, clubs, activités sportives).
 Tu n'es pas commerciale - tu écris comme une experte qui partage une observation utile.
 Chaque email suit une structure simple : observation concrète, lecture prudente, question ouverte.
 
@@ -770,6 +841,48 @@ https://tourisme.kawanah.com/"""
             return self._generate_demo_message(
                 lead, channel, tone, sender_name, custom_instructions
             )
+
+    def _generate_unverified_site_message(
+        self,
+        lead: Lead,
+        channel: MessageChannel,
+        tone: MessageTone,
+        sender_name: str = "Laetitia",
+    ) -> GeneratedMessage:
+        """Message sûr quand le site associé au lead n'est pas fiable."""
+        name = lead.name
+        city = lead.city or "votre secteur"
+        signature = (
+            f"{sender_name} pour Kawanah Tourisme\nhttps://tourisme.kawanah.com/"
+        )
+        booking_cta = (
+            f"On peut prendre un rendez-vous pour en parler : {settings.booking_link}"
+            if settings.booking_link
+            else ""
+        )
+
+        body = f"""Bonjour,
+
+En regardant {name} à {city}, je n'ai pas trouvé de site web propre suffisamment fiable à associer à votre activité.
+
+Peut-être qu'il existe sous une autre adresse, ou que vous utilisez surtout d'autres canaux aujourd'hui. Dans tous les cas, c'est souvent un point qui complique la découverte pour les personnes qui cherchent rapidement des informations pratiques depuis leur téléphone.
+
+Chez Kawanah, nous pouvons vous montrer à quoi ressemblerait une page claire pour présenter votre activité, votre localisation, vos informations de contact et les éléments qui rassurent les visiteurs.
+
+{booking_cta}
+
+Belle journée,
+
+{signature}"""
+
+        return GeneratedMessage(
+            subject=f"{name} - présence en ligne",
+            body=body,
+            channel=channel,
+            tone=tone,
+            lead_segment=lead.priority_level,
+            personalization_points=["site_non_valide", "nom_etablissement", "ville"],
+        )
 
     def _parse_response(
         self, response: str, lead: Lead, channel: MessageChannel, tone: MessageTone
@@ -843,7 +956,17 @@ https://tourisme.kawanah.com/"""
             soft_frags.append("votre site n'est pas encore optimisé pour les mobiles")
         if audit.get("design_dated"):
             soft_frags.append("son design gagnerait à être rafraîchi")
-        if not audit.get("has_reservation"):
+        if (
+            lead_type_val
+            in (
+                "hotel",
+                "camping",
+                "gite",
+                "chambre_hotes",
+                "residence",
+            )
+            and audit.get("has_reservation") is False
+        ):
             soft_frags.append("la réservation en direct n'est pas encore possible")
         if audit.get("has_embedded_reviews") is False:
             soft_frags.append("les avis de vos clients ne sont pas mis en avant")
@@ -860,6 +983,20 @@ https://tourisme.kawanah.com/"""
         else:
             constats_phrase = "quelques détails gagneraient à être valorisés"
 
+        if lead_type_val == "activite":
+            visitor_goal = (
+                "de comprendre où pratiquer, comment vous contacter ou s'inscrire, "
+                "de trouver les horaires et les informations pratiques, et de découvrir "
+                "la vie de votre structure dès la première visite"
+            )
+            conversion_goal = "transformer plus de visiteurs en demandes de contact"
+        else:
+            visitor_goal = (
+                f"de réserver en quelques clics, de trouver tout de suite les informations pratiques, "
+                f"de se rassurer avec les avis d'autres {visitors_word}, et de découvrir un univers moderne dès la première seconde"
+            )
+            conversion_goal = "transformer plus de visiteurs en clients"
+
         subject = (
             f"Votre {type_label} mérite un site à la hauteur de l'expérience proposée"
         )
@@ -871,9 +1008,9 @@ Votre {type_label} {compliment}, et ça se ressent. Aujourd'hui, votre présence
 
 La plupart des visiteurs découvrent désormais un établissement depuis leur smartphone. Or {constats_phrase}.
 
-Imaginez un site qui permette à vos visiteurs de réserver en quelques clics, de trouver tout de suite les informations pratiques, de se rassurer avec les avis d'autres {visitors_word}, et de découvrir un univers moderne dès la première seconde.
+Imaginez un site qui permette à vos visiteurs {visitor_goal}.
 
-C'est exactement ce que nous concevons chez Kawanah : des sites touristiques modernes et responsives, avec un socle SEO et IA natif pour être visibles sur Google comme sur les nouveaux moteurs IA type ChatGPT. L'objectif est simple : transformer plus de visiteurs en clients.
+C'est exactement ce que nous concevons chez Kawanah : des sites modernes et responsives, avec un socle SEO et IA natif pour être visibles sur Google comme sur les nouveaux moteurs IA type ChatGPT. L'objectif est simple : {conversion_goal}.
 
 Je peux vous montrer en 15 minutes ce à quoi pourrait ressembler une nouvelle version du site de {name}.
 
@@ -926,16 +1063,6 @@ Je peux vous montrer en 15 minutes ce à quoi pourrait ressembler une nouvelle v
             else ""
         )
         type_label = self._get_type_label(lead)
-
-        # Contexte géographique pour personnaliser
-        regional = self._get_regional_context(lead)
-        # Phrase d'accroche locale adaptée
-        if regional:
-            # Extraire le premier mot-clé touristique pertinent
-            keywords = [k.strip() for k in regional.split(",")]
-            local_hook = keywords[0] if keywords else city
-        else:
-            local_hook = city
 
         # Adapter le vocabulaire au type d'établissement
         lead_type_val = lead.lead_type.value if lead.lead_type else "other"
@@ -1049,6 +1176,7 @@ Je peux vous montrer en 15 minutes ce à quoi pourrait ressembler une nouvelle v
 
         if custom_instructions:
             subject = f"{name} - mise en valeur en ligne"
+            lead_type_val = lead.lead_type.value if lead.lead_type else "other"
             landing_angle = (
                 "une page simple et claire"
                 if "landing" in custom_instructions.lower()
@@ -1067,13 +1195,24 @@ Je peux vous montrer en 15 minutes ce à quoi pourrait ressembler une nouvelle v
                 if "avis" in custom_instructions.lower()
                 else "et une mise en valeur plus directe de l'expérience proposée"
             )
+            if lead_type_val == "activite":
+                conversion_line = (
+                    "L'idée ne serait pas de tout refaire, plutôt de créer un point d'entrée plus lisible "
+                    "pour aider les visiteurs à comprendre l'activité, trouver les informations pratiques "
+                    "et vous contacter plus facilement."
+                )
+            else:
+                conversion_line = (
+                    "L'idée ne serait pas de tout refaire, plutôt de créer un point d'entrée plus lisible "
+                    "pour améliorer la visibilité et faciliter le premier contact."
+                )
             body = f"""Bonjour,
 
 {website_reference}
 
 Il y a peut-être une piste assez concrète : {landing_angle}, {location_angle}, {reviews_angle}.
 
-L'idée ne serait pas de tout refaire, plutôt de créer un point d'entrée plus lisible pour améliorer la visibilité et faciliter le premier contact.
+{conversion_line}
 
 Vous aviez déjà envisagé ce type de mise en valeur pour {name} ?
 
@@ -1185,14 +1324,9 @@ Vous avez déjà prévu de le reprendre, ou ce n'est pas le moment ?
 
         elif is_new and "SANS SITE" in priority:
             if lead.established_date:
-                from datetime import date as _d
-
-                months = int(((_d.today() - lead.established_date).days) / 30)
                 opening_ref = f"en {lead.established_date.strftime('%B %Y')}"
-                age_note = f"- {months} mois déjà" if months > 3 else "- tout frais"
             else:
                 opening_ref = f"à {city}"
-                age_note = ""
 
             subject = f"Félicitations pour {name}"
             body = f"""Bonjour,
